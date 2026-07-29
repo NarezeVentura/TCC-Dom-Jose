@@ -6,9 +6,18 @@ from flask import Flask, jsonify, request
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+frontend_dir = os.path.join(BASE_DIR, "front end")
 db_path = os.path.join(BASE_DIR, "sistema_vendas.db")
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=frontend_dir, static_url_path="/")
+
+
+@app.after_request
+def adicionar_cors(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return response
 
 
 def get_connection():
@@ -202,6 +211,11 @@ def salvar_relatorio(tipo_relatorio, faturamento, lucro, comissao, vendedor_id=N
     conn.close()
 
 
+@app.route("/", methods=["GET"])
+def index():
+    return app.send_static_file("index.html")
+
+
 @app.route("/api/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "message": "Backend pronto para o frontend"})
@@ -237,24 +251,46 @@ def listar_produtos():
 def registrar_vendas():
     dados = request.get_json(silent=True) or {}
 
-    vendedor_id = dados.get("vendedor_id")
+    vendedor_id = dados.get("vendedor_id") or 1
     tipo_relatorio = (dados.get("tipo_relatorio") or "diario").lower()
     itens = dados.get("itens") or []
 
-    if not vendedor_id:
-        return jsonify({"error": "vendedor_id é obrigatório"}), 400
     if tipo_relatorio not in {"diario", "semanal", "mensal"}:
         return jsonify({"error": "tipo_relatorio inválido"}), 400
+
     if not itens:
-        return jsonify({"error": "Informe pelo menos um produto"}), 400
+        produto_nome = dados.get("produto") or dados.get("nome_produto")
+        quantidade = int(dados.get("quantidade", 0) or 0)
+        valor_unitario = float(dados.get("valor_unitario") or dados.get("valor") or 0)
+
+        if not produto_nome or quantidade <= 0:
+            return jsonify({"error": "Informe pelo menos um produto válido"}), 400
+
+        itens = [{"produto": produto_nome, "quantidade": quantidade, "valor_unitario": valor_unitario}]
 
     conn = get_connection()
     cursor = conn.cursor()
 
     try:
+        total_faturamento = 0.0
         for item in itens:
             produto_id = item.get("produto_id")
-            quantidade = item.get("quantidade", 0)
+            produto_nome = item.get("produto") or item.get("nome_produto")
+            quantidade = int(item.get("quantidade", 0) or 0)
+            valor_unitario = float(item.get("valor_unitario") or item.get("valor") or 0)
+
+            if not produto_id and produto_nome:
+                cursor.execute("SELECT id_produto FROM produtos WHERE tipo = ?", (produto_nome,))
+                produto_existente = cursor.fetchone()
+                if produto_existente:
+                    produto_id = produto_existente[0]
+                else:
+                    preco_producao = valor_unitario * 0.7 if valor_unitario else 0.0
+                    cursor.execute(
+                        "INSERT INTO produtos (tipo, preco_producao, preco_venda) VALUES (?, ?, ?)",
+                        (produto_nome, preco_producao, valor_unitario),
+                    )
+                    produto_id = cursor.lastrowid
 
             if not produto_id or quantidade <= 0:
                 continue
@@ -263,6 +299,7 @@ def registrar_vendas():
                 "INSERT INTO vendas (id_vendedor, id_produto, quantidade) VALUES (?, ?, ?)",
                 (vendedor_id, produto_id, quantidade),
             )
+            total_faturamento += (valor_unitario or 0) * quantidade
 
         conn.commit()
     except Exception as exc:
@@ -273,9 +310,9 @@ def registrar_vendas():
     relatorio = calcular_relatorio(tipo_relatorio, vendedor_id)
     salvar_relatorio(
         tipo_relatorio,
-        relatorio["faturamento"],
-        relatorio["lucro"],
-        relatorio["comissao"],
+        relatorio["faturamento"] if relatorio["faturamento"] else round(total_faturamento, 2),
+        relatorio["lucro"] if relatorio["lucro"] else 0,
+        relatorio["comissao"] if relatorio["comissao"] else 0,
         vendedor_id,
     )
 

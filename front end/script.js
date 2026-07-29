@@ -3,33 +3,135 @@ const table = document.getElementById("salesTable");
 
 const produtoSelect = document.getElementById("produto");
 const valorInput = document.getElementById("valor");
-
 const comboArea = document.getElementById("comboArea");
 const comboSabores = document.getElementById("comboSabores");
 
 const maisVendidoEl = document.getElementById("maisVendido");
 const vendasHojeEl = document.getElementById("vendasHoje");
+const clientesCadastradosEl = document.getElementById("clientesCadastrados");
 
 let vendas = [];
 let totalVendasHoje = 0;
 
-// valor automático + combo
-produtoSelect.addEventListener("change", function () {
+function formatarMoeda(valor) {
+  return `R$ ${Number(valor || 0).toFixed(2)}`;
+}
 
+function atualizarVendasHoje() {
+  vendasHojeEl.textContent = formatarMoeda(totalVendasHoje);
+}
+
+function atualizarMaisVendido() {
+  if (vendas.length === 0) {
+    maisVendidoEl.textContent = "Nenhuma venda registrada";
+    return;
+  }
+
+  const contagem = {};
+
+  vendas.forEach((v) => {
+    const nome = v.produto.replace(/\(.*\)/g, "").trim();
+    if (!nome) return;
+    contagem[nome] = (contagem[nome] || 0) + v.quantidade;
+  });
+
+  let maisVendido = "";
+  let maior = 0;
+
+  Object.entries(contagem).forEach(([produto, quantidade]) => {
+    if (quantidade > maior) {
+      maior = quantidade;
+      maisVendido = produto;
+    }
+  });
+
+  maisVendidoEl.textContent = maisVendido || "Nenhuma venda registrada";
+}
+
+function mostrarPagina(pagina) {
+  const pages = document.querySelectorAll(".page");
+  pages.forEach((p) => {
+    p.style.display = "none";
+  });
+
+  const alvo = document.getElementById(pagina);
+  if (alvo) {
+    alvo.style.display = "block";
+  }
+}
+
+async function carregarProdutos() {
+  try {
+    const resposta = await fetch("/api/produtos");
+    const produtos = await resposta.json();
+
+    produtoSelect.innerHTML = '<option value="">Selecione o produto</option>';
+
+    const addGroup = (label, items) => {
+      if (!items.length) return;
+
+      const grupo = document.createElement("optgroup");
+      grupo.label = label;
+
+      items.forEach((produto) => {
+        const option = document.createElement("option");
+        option.value = produto.tipo;
+        option.textContent = produto.tipo;
+        option.setAttribute("data-valor", produto.preco_venda);
+        option.setAttribute("data-id", produto.id);
+        option.setAttribute("data-tipo", /combo/i.test(produto.tipo) ? "combo" : "normal");
+        grupo.appendChild(option);
+      });
+
+      produtoSelect.appendChild(grupo);
+    };
+
+    addGroup("🍫 Cones", produtos.filter((p) => /cone|cones/i.test(p.tipo)));
+    addGroup("🍬 Trufas", produtos.filter((p) => /trufa|bombom/i.test(p.tipo)));
+    addGroup("🎁 Combos", produtos.filter((p) => /combo/i.test(p.tipo)));
+  } catch (error) {
+    console.error("Erro ao carregar produtos:", error);
+  }
+}
+
+async function carregarResumo() {
+  try {
+    const [vendedoresResp, relatoriosResp] = await Promise.all([
+      fetch("/api/vendedores"),
+      fetch("/api/relatorios?tipo=diario")
+    ]);
+
+    const vendedores = await vendedoresResp.json();
+    const relatorios = await relatoriosResp.json();
+
+    clientesCadastradosEl.textContent = `${vendedores.length} vendedores`;
+
+    if (relatorios.length > 0) {
+      const ultimo = relatorios[0];
+      totalVendasHoje = Number(ultimo.faturamento || 0);
+      atualizarVendasHoje();
+    } else {
+      totalVendasHoje = 0;
+      atualizarVendasHoje();
+    }
+  } catch (error) {
+    console.error("Erro ao carregar resumo:", error);
+  }
+}
+
+produtoSelect.addEventListener("change", function () {
   const option = produtoSelect.options[produtoSelect.selectedIndex];
   const valor = option.getAttribute("data-valor");
   const tipo = option.getAttribute("data-tipo");
-  const qtd = option.getAttribute("data-qtd");
+  const qtd = option.getAttribute("data-qtd") || "2";
 
   valorInput.value = valor ? valor : "";
 
-  // se for combo
   if (tipo === "combo") {
-
     comboArea.style.display = "block";
     comboSabores.innerHTML = "";
 
-    for (let i = 1; i <= qtd; i++) {
+    for (let i = 1; i <= Number(qtd); i++) {
       comboSabores.innerHTML += `
         <div style="margin-bottom:10px;">
           <label>Sabor ${i}</label>
@@ -51,123 +153,81 @@ produtoSelect.addEventListener("change", function () {
         </div>
       `;
     }
-
   } else {
     comboArea.style.display = "none";
     comboSabores.innerHTML = "";
   }
 });
 
-// venda
-form.addEventListener("submit", function (e) {
+form.addEventListener("submit", async function (e) {
   e.preventDefault();
 
-  const cliente = form.querySelector("input").value;
-
+  const cliente = document.getElementById("cliente").value.trim();
   const option = produtoSelect.options[produtoSelect.selectedIndex];
   const tipo = option.getAttribute("data-tipo");
 
-  let produto = produtoSelect.value;
+  let produto = option.value;
 
-  // se for combo, monta sabores
   if (tipo === "combo") {
-    const sabores = document.querySelectorAll(".combo-sabor");
-    let lista = [];
-
-    sabores.forEach(s => lista.push(s.value));
-
-    produto = `${produtoSelect.value} (${lista.join(", ")})`;
+    const sabores = Array.from(document.querySelectorAll(".combo-sabor")).map((s) => s.value);
+    produto = `${produto} (${sabores.join(", ")})`;
   }
 
-  const quantidade = Number(form.querySelectorAll("input")[1].value);
-  const valor = Number(valorInput.value);
+  const quantidade = Number(document.getElementById("quantidade").value);
+  const valor = Number(valorInput.value || option.getAttribute("data-valor") || 0);
 
-  const total = quantidade * valor;
-
-  vendas.push({
-    produto,
-    quantidade
-  });
-
-  totalVendasHoje += total;
-  atualizarVendasHoje();
-
-  table.innerHTML += `
-    <tr>
-      <td>${cliente}</td>
-      <td>${produto}</td>
-      <td>${quantidade}</td>
-      <td>R$ ${total.toFixed(2)}</td>
-    </tr>
-  `;
-
-  atualizarMaisVendido();
-
-  form.reset();
-  valorInput.value = "";
-  comboArea.style.display = "none";
-  comboSabores.innerHTML = "";
-});
-
-// vendas hoje
-function atualizarVendasHoje() {
-  vendasHojeEl.textContent = `R$ ${totalVendasHoje.toFixed(2)}`;
-}
-
-// mais vendido
-function atualizarMaisVendido() {
-  if (vendas.length === 0) {
-    maisVendidoEl.textContent = "Nenhuma venda ainda";
+  if (!produto || !quantidade || quantidade <= 0) {
+    alert("Preencha o produto e a quantidade corretamente.");
     return;
   }
 
-  const contagem = {};
-
-  vendas.forEach(v => {
-
-    // pega apenas sabores separados por vírgula (caso combo)
-    const sabores = v.produto
-      .replace(/\(.*\)/g, "") // remove tudo entre parênteses (combos)
-      .split(",");
-
-    sabores.forEach(sabor => {
-      const clean = sabor.trim();
-
-      if (!clean) return;
-
-      contagem[clean] = (contagem[clean] || 0) + v.quantidade;
+  try {
+    const resposta = await fetch("/api/vendas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vendedor_id: 1,
+        tipo_relatorio: "diario",
+        itens: [{ produto, quantidade, valor_unitario: valor }],
+        cliente
+      })
     });
 
-  });
+    const dados = await resposta.json();
 
-  let maisVendido = "";
-  let maior = 0;
-
-  for (let sabor in contagem) {
-    if (contagem[sabor] > maior) {
-      maior = contagem[sabor];
-      maisVendido = sabor;
+    if (!resposta.ok) {
+      throw new Error(dados.error || "Erro ao registrar venda");
     }
+
+    vendas.push({ produto, quantidade });
+    atualizarMaisVendido();
+
+    const total = quantidade * valor;
+    totalVendasHoje = Number(dados.relatorio?.faturamento || totalVendasHoje + total);
+    atualizarVendasHoje();
+
+    table.innerHTML += `
+      <tr>
+        <td>${cliente || "Cliente"}</td>
+        <td>${produto}</td>
+        <td>${quantidade}</td>
+        <td>${formatarMoeda(total)}</td>
+      </tr>
+    `;
+
+    form.reset();
+    valorInput.value = "";
+    comboArea.style.display = "none";
+    comboSabores.innerHTML = "";
+  } catch (error) {
+    console.error(error);
+    alert(error.message);
   }
-
-  maisVendidoEl.textContent = maisVendido;
-}
-
-function mostrarPagina(pagina) {
-
-  const pages = document.querySelectorAll(".page");
-
-  pages.forEach(p => {
-    p.style.display = "none";
-  });
-
-  const alvo = document.getElementById(pagina);
-  if (alvo) {
-    alvo.style.display = "block";
-  }
-}
+});
 
 /* abre dashboard ao iniciar */
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   mostrarPagina("dashboard");
+  await carregarProdutos();
+  await carregarResumo();
 });
