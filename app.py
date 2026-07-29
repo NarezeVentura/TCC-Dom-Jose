@@ -324,6 +324,63 @@ def registrar_vendas():
     })
 
 
+@app.route("/api/vendas", methods=["GET"])
+def listar_vendas_api():
+    conn = get_connection()
+    rows = conn.execute(
+        """
+        SELECT v.id_venda, v.id_vendedor, v.id_produto, v.quantidade, v.data,
+               p.tipo AS produto, p.preco_venda
+        FROM vendas v
+        JOIN produtos p ON p.id_produto = v.id_produto
+        ORDER BY v.data DESC, v.id_venda DESC
+        """
+    ).fetchall()
+    conn.close()
+    return jsonify([
+        {
+            "id": row["id_venda"],
+            "vendedor_id": row["id_vendedor"],
+            "produto_id": row["id_produto"],
+            "produto": row["produto"],
+            "quantidade": row["quantidade"],
+            "valor_unitario": row["preco_venda"],
+            "data": row["data"],
+        }
+        for row in rows
+    ])
+
+
+@app.route("/api/vendas/<int:venda_id>", methods=["PUT"])
+def editar_venda(venda_id):
+    dados = request.get_json(silent=True) or {}
+    quantidade = int(dados.get("quantidade", 0) or 0)
+    produto_id = dados.get("produto_id")
+
+    if quantidade <= 0:
+        return jsonify({"error": "Quantidade inválida"}), 400
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE vendas SET id_produto = ?, quantidade = ? WHERE id_venda = ?",
+        (produto_id, quantidade, venda_id),
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Venda atualizada"})
+
+
+@app.route("/api/vendas/<int:venda_id>", methods=["DELETE"])
+def apagar_venda(venda_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM vendas WHERE id_venda = ?", (venda_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Venda removida"})
+
+
 @app.route("/api/relatorios", methods=["GET"])
 def listar_relatorios():
     tipo_relatorio = request.args.get("tipo", "todos").lower()

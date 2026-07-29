@@ -12,6 +12,8 @@ const clientesCadastradosEl = document.getElementById("clientesCadastrados");
 
 let vendas = [];
 let totalVendasHoje = 0;
+let produtosDisponiveis = [];
+let vendaEditandoId = null;
 
 function formatarMoeda(valor) {
   return `R$ ${Number(valor || 0).toFixed(2)}`;
@@ -52,18 +54,45 @@ function mostrarPagina(pagina) {
   const pages = document.querySelectorAll(".page");
   pages.forEach((p) => {
     p.style.display = "none";
+    p.classList.remove("active");
   });
 
   const alvo = document.getElementById(pagina);
   if (alvo) {
     alvo.style.display = "block";
+    alvo.classList.add("active");
+    alvo.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+}
+
+function preencherTabela(vendasRecebidas) {
+  vendas = vendasRecebidas;
+  table.innerHTML = "";
+
+  vendasRecebidas.forEach((venda) => {
+    const total = Number(venda.quantidade || 0) * Number(venda.valor_unitario || 0);
+    table.innerHTML += `
+      <tr>
+        <td>${venda.vendedor_id || "Cliente"}</td>
+        <td>${venda.produto}</td>
+        <td>${venda.quantidade}</td>
+        <td>${formatarMoeda(total)}</td>
+        <td>
+          <button type="button" onclick="editarVenda(${venda.id})">Editar</button>
+          <button type="button" onclick="apagarVenda(${venda.id})">Apagar</button>
+        </td>
+      </tr>
+    `;
+  });
+
+  atualizarMaisVendido();
 }
 
 async function carregarProdutos() {
   try {
     const resposta = await fetch("/api/produtos");
     const produtos = await resposta.json();
+    produtosDisponiveis = produtos;
 
     produtoSelect.innerHTML = '<option value="">Selecione o produto</option>';
 
@@ -96,15 +125,18 @@ async function carregarProdutos() {
 
 async function carregarResumo() {
   try {
-    const [vendedoresResp, relatoriosResp] = await Promise.all([
+    const [vendedoresResp, relatoriosResp, vendasResp] = await Promise.all([
       fetch("/api/vendedores"),
-      fetch("/api/relatorios?tipo=diario")
+      fetch("/api/relatorios?tipo=diario"),
+      fetch("/api/vendas")
     ]);
 
     const vendedores = await vendedoresResp.json();
     const relatorios = await relatoriosResp.json();
+    const vendasRecebidas = await vendasResp.json();
 
     clientesCadastradosEl.textContent = `${vendedores.length} vendedores`;
+    preencherTabela(vendasRecebidas);
 
     if (relatorios.length > 0) {
       const ultimo = relatorios[0];
@@ -116,6 +148,47 @@ async function carregarResumo() {
     }
   } catch (error) {
     console.error("Erro ao carregar resumo:", error);
+  }
+}
+
+async function editarVenda(id) {
+  try {
+    const resposta = await fetch(`/api/vendas`);
+    const vendasRecebidas = await resposta.json();
+    const venda = vendasRecebidas.find((item) => item.id === id);
+
+    if (!venda) return;
+
+    const produto = produtosDisponiveis.find((item) => item.tipo === venda.produto);
+    if (produto) {
+      Array.from(produtoSelect.options).forEach((option) => {
+        if (option.value === produto.tipo) option.selected = true;
+      });
+      valorInput.value = produto.preco_venda;
+    }
+
+    document.getElementById("quantidade").value = venda.quantidade;
+    document.getElementById("cliente").value = venda.vendedor_id || "Cliente";
+    vendaEditandoId = id;
+    form.querySelector("button").textContent = "Salvar edição";
+    mostrarPagina("vendas");
+  } catch (error) {
+    console.error("Erro ao carregar venda para editar:", error);
+  }
+}
+
+async function apagarVenda(id) {
+  if (!confirm("Deseja remover esta venda?")) return;
+
+  try {
+    const resposta = await fetch(`/api/vendas/${id}`, { method: "DELETE" });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.error || "Erro ao apagar venda");
+    await carregarResumo();
+    alert(dados.message);
+  } catch (error) {
+    console.error(error);
+    alert(error.message);
   }
 }
 
@@ -182,43 +255,41 @@ form.addEventListener("submit", async function (e) {
   }
 
   try {
-    const resposta = await fetch("/api/vendas", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        vendedor_id: 1,
-        tipo_relatorio: "diario",
-        itens: [{ produto, quantidade, valor_unitario: valor }],
-        cliente
-      })
-    });
+    if (vendaEditandoId) {
+      const resposta = await fetch(`/api/vendas/${vendaEditandoId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ produto_id: produtosDisponiveis.find((item) => item.tipo === produto)?.id || 1, quantidade })
+      });
+      const dados = await resposta.json();
+      if (!resposta.ok) throw new Error(dados.error || "Erro ao editar venda");
+      alert(dados.message);
+    } else {
+      const resposta = await fetch("/api/vendas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vendedor_id: 1,
+          tipo_relatorio: "diario",
+          itens: [{ produto, quantidade, valor_unitario: valor }],
+          cliente
+        })
+      });
 
-    const dados = await resposta.json();
-
-    if (!resposta.ok) {
-      throw new Error(dados.error || "Erro ao registrar venda");
+      const dados = await resposta.json();
+      if (!resposta.ok) throw new Error(dados.error || "Erro ao registrar venda");
+      totalVendasHoje = Number(dados.relatorio?.faturamento || totalVendasHoje + quantidade * valor);
+      atualizarVendasHoje();
+      alert(dados.message);
     }
 
-    vendas.push({ produto, quantidade });
-    atualizarMaisVendido();
-
-    const total = quantidade * valor;
-    totalVendasHoje = Number(dados.relatorio?.faturamento || totalVendasHoje + total);
-    atualizarVendasHoje();
-
-    table.innerHTML += `
-      <tr>
-        <td>${cliente || "Cliente"}</td>
-        <td>${produto}</td>
-        <td>${quantidade}</td>
-        <td>${formatarMoeda(total)}</td>
-      </tr>
-    `;
-
+    await carregarResumo();
     form.reset();
     valorInput.value = "";
     comboArea.style.display = "none";
     comboSabores.innerHTML = "";
+    vendaEditandoId = null;
+    form.querySelector("button").textContent = "Registrar venda";
   } catch (error) {
     console.error(error);
     alert(error.message);
