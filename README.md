@@ -26,10 +26,8 @@ Este projeto é uma aplicação web simples para registrar vendas, calcular fatu
 
 -Como executar
 
-1. Entre na pasta do projeto:
-   ```bash
-   cd "c:/Users/Ronaldo/OneDrive/Área de Trabalho/VSCODE/TCC Dom Jose"
-   ```
+1. Entre na pasta do projeto
+
 
 2. Inicie o backend:
    ```bash
