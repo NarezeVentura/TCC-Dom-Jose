@@ -10,7 +10,7 @@ class TestFluxoFechamentoDiario(unittest.TestCase):
         self.db_path = os.path.join(self.tmpdir.name, "test_sistema_vendas.db")
         os.environ["DB_PATH"] = self.db_path
 
-        import app a app_module
+        import app as app_module
 
         self.app_module = importlib.reload(app_module)
         self.client = self.app_module.app.test_client()
