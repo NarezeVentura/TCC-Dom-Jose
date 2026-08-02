@@ -1,10 +1,10 @@
-const form = document.getElementById("saleForm");
-const table = document.getElementById("salesTable");
-
-const produtoSelect = document.getElementById("produto");
-const valorInput = document.getElementById("valor");
-const comboArea = document.getElementById("comboArea");
-const comboSabores = document.getElementById("comboSabores");
+﻿const catalogoProdutosEl = document.getElementById("catalogoProdutos");
+const itensVendaListEl = document.getElementById("itensVendaList");
+const form = document.getElementById("closureForm");
+const reportsTable = document.getElementById("reportsTable");
+const periodoRelatorioEl = document.getElementById("periodoRelatorio");
+const addItemBtn = document.getElementById("addItemBtn");
+const refreshReportsBtn = document.getElementById("refreshReportsBtn");
 
 const maisVendidoEl = document.getElementById("maisVendido");
 const vendasHojeEl = document.getElementById("vendasHoje");
@@ -13,41 +13,9 @@ const clientesCadastradosEl = document.getElementById("clientesCadastrados");
 let vendas = [];
 let totalVendasHoje = 0;
 let produtosDisponiveis = [];
-let vendaEditandoId = null;
 
 function formatarMoeda(valor) {
-  return `R$ ${Number(valor || 0).toFixed(2)}`;
-}
-
-function atualizarVendasHoje() {
-  vendasHojeEl.textContent = formatarMoeda(totalVendasHoje);
-}
-
-function atualizarMaisVendido() {
-  if (vendas.length === 0) {
-    maisVendidoEl.textContent = "Nenhuma venda registrada";
-    return;
-  }
-
-  const contagem = {};
-
-  vendas.forEach((v) => {
-    const nome = v.produto.replace(/\(.*\)/g, "").trim();
-    if (!nome) return;
-    contagem[nome] = (contagem[nome] || 0) + v.quantidade;
-  });
-
-  let maisVendido = "";
-  let maior = 0;
-
-  Object.entries(contagem).forEach(([produto, quantidade]) => {
-    if (quantidade > maior) {
-      maior = quantidade;
-      maisVendido = produto;
-    }
-  });
-
-  maisVendidoEl.textContent = maisVendido || "Nenhuma venda registrada";
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(valor || 0));
 }
 
 function mostrarPagina(pagina) {
@@ -65,27 +33,108 @@ function mostrarPagina(pagina) {
   }
 }
 
-function preencherTabela(vendasRecebidas) {
-  vendas = vendasRecebidas;
-  table.innerHTML = "";
+function preencherCatalogo(produtos) {
+  catalogoProdutosEl.innerHTML = "";
 
-  vendasRecebidas.forEach((venda) => {
-    const total = Number(venda.quantidade || 0) * Number(venda.valor_unitario || 0);
-    table.innerHTML += `
-      <tr>
-        <td>${venda.vendedor_id || "Cliente"}</td>
-        <td>${venda.produto}</td>
-        <td>${venda.quantidade}</td>
-        <td>${formatarMoeda(total)}</td>
-        <td>
-          <button type="button" onclick="editarVenda(${venda.id})">Editar</button>
-          <button type="button" onclick="apagarVenda(${venda.id})">Apagar</button>
-        </td>
-      </tr>
+  if (!produtos.length) {
+    catalogoProdutosEl.innerHTML = '<p class="empty-state">Nenhum produto cadastrado ainda.</p>';
+    return;
+  }
+
+  produtos.forEach((produto) => {
+    const card = document.createElement("article");
+    card.className = "produto-card";
+    card.innerHTML = `
+      <h3>${produto.tipo}</h3>
+      <p class="categoria">${produto.categoria || "Geral"}</p>
+      <span>Venda: ${formatarMoeda(produto.preco_venda)}</span>
+      <small>Produção: ${formatarMoeda(produto.preco_producao)}</small>
     `;
+    catalogoProdutosEl.appendChild(card);
+  });
+}
+
+function criarLinhaItem(item = {}) {
+  const row = document.createElement("div");
+  row.className = "item-row";
+  row.innerHTML = `
+    <select class="produto-item" required>
+      <option value="">Selecione o produto</option>
+    </select>
+    <input type="number" class="item-quantidade" min="1" value="${item.quantidade || 1}" placeholder="Quantidade" required>
+    <input type="number" class="item-valor" step="0.01" placeholder="Valor unitário" readonly>
+    <button type="button" class="remove-item-btn">Remover</button>
+  `;
+
+  const select = row.querySelector(".produto-item");
+  const valorEl = row.querySelector(".item-valor");
+
+  produtosDisponiveis.forEach((produto) => {
+    const option = document.createElement("option");
+    option.value = produto.tipo;
+    option.textContent = produto.tipo;
+    option.setAttribute("data-valor", produto.preco_venda);
+    select.appendChild(option);
   });
 
-  atualizarMaisVendido();
+  if (item.produto) {
+    select.value = item.produto;
+    const selected = Array.from(select.options).find((option) => option.value === item.produto);
+    if (selected) {
+      valorEl.value = selected.getAttribute("data-valor") || item.valor_unitario || "";
+    }
+  }
+
+  select.addEventListener("change", () => {
+    const selected = select.options[select.selectedIndex];
+    valorEl.value = selected?.getAttribute("data-valor") || "";
+  });
+
+  row.querySelector(".remove-item-btn").addEventListener("click", () => {
+    row.remove();
+  });
+
+  return row;
+}
+
+function renderizarItens(items = []) {
+  itensVendaListEl.innerHTML = "";
+  if (!items.length) {
+    itensVendaListEl.appendChild(criarLinhaItem());
+    return;
+  }
+
+  items.forEach((item) => itensVendaListEl.appendChild(criarLinhaItem(item)));
+}
+
+function atualizarVendasHoje() {
+  vendasHojeEl.textContent = formatarMoeda(totalVendasHoje);
+}
+
+function atualizarMaisVendido() {
+  if (!vendas.length) {
+    maisVendidoEl.textContent = "Nenhuma venda registrada";
+    return;
+  }
+
+  const contagem = {};
+  vendas.forEach((v) => {
+    const nome = (v.produto || "").replace(/\(.*\)/g, "").trim();
+    if (!nome) return;
+    contagem[nome] = (contagem[nome] || 0) + Number(v.quantidade || 0);
+  });
+
+  let maisVendido = "";
+  let maior = 0;
+
+  Object.entries(contagem).forEach(([produto, quantidade]) => {
+    if (quantidade > maior) {
+      maior = quantidade;
+      maisVendido = produto;
+    }
+  });
+
+  maisVendidoEl.textContent = maisVendido || "Nenhuma venda registrada";
 }
 
 async function carregarProdutos() {
@@ -93,31 +142,8 @@ async function carregarProdutos() {
     const resposta = await fetch("/api/produtos");
     const produtos = await resposta.json();
     produtosDisponiveis = produtos;
-
-    produtoSelect.innerHTML = '<option value="">Selecione o produto</option>';
-
-    const addGroup = (label, items) => {
-      if (!items.length) return;
-
-      const grupo = document.createElement("optgroup");
-      grupo.label = label;
-
-      items.forEach((produto) => {
-        const option = document.createElement("option");
-        option.value = produto.tipo;
-        option.textContent = produto.tipo;
-        option.setAttribute("data-valor", produto.preco_venda);
-        option.setAttribute("data-id", produto.id);
-        option.setAttribute("data-tipo", /combo/i.test(produto.tipo) ? "combo" : "normal");
-        grupo.appendChild(option);
-      });
-
-      produtoSelect.appendChild(grupo);
-    };
-
-    addGroup("🍫 Cones", produtos.filter((p) => /cone|cones/i.test(p.tipo)));
-    addGroup("🍬 Trufas", produtos.filter((p) => /trufa|bombom/i.test(p.tipo)));
-    addGroup("🎁 Combos", produtos.filter((p) => /combo/i.test(p.tipo)));
+    preencherCatalogo(produtos);
+    renderizarItens();
   } catch (error) {
     console.error("Erro ao carregar produtos:", error);
   }
@@ -125,180 +151,124 @@ async function carregarProdutos() {
 
 async function carregarResumo() {
   try {
-    const [vendedoresResp, relatoriosResp, vendasResp] = await Promise.all([
+    const [vendedoresResp, fechamentosResp, vendasResp] = await Promise.all([
       fetch("/api/vendedores"),
-      fetch("/api/relatorios?tipo=diario"),
+      fetch("/api/fechamentos-diarios"),
       fetch("/api/vendas")
     ]);
 
     const vendedores = await vendedoresResp.json();
-    const relatorios = await relatoriosResp.json();
+    const fechamentos = await fechamentosResp.json();
     const vendasRecebidas = await vendasResp.json();
 
+    vendas = vendasRecebidas;
     clientesCadastradosEl.textContent = `${vendedores.length} vendedores`;
-    preencherTabela(vendasRecebidas);
+    atualizarMaisVendido();
 
-    if (relatorios.length > 0) {
-      const ultimo = relatorios[0];
-      totalVendasHoje = Number(ultimo.faturamento || 0);
-      atualizarVendasHoje();
+    if (fechamentos.length > 0) {
+      const ultimo = fechamentos[0];
+      totalVendasHoje = Number(ultimo.total_faturamento || 0);
     } else {
       totalVendasHoje = 0;
-      atualizarVendasHoje();
     }
+
+    atualizarVendasHoje();
   } catch (error) {
     console.error("Erro ao carregar resumo:", error);
   }
 }
 
-async function editarVenda(id) {
+async function carregarRelatorios(periodo = "diario") {
   try {
-    const resposta = await fetch(`/api/vendas`);
-    const vendasRecebidas = await resposta.json();
-    const venda = vendasRecebidas.find((item) => item.id === id);
+    const resposta = await fetch(`/api/relatorios?tipo=${periodo}`);
+    const relatorios = await resposta.json();
+    reportsTable.innerHTML = "";
 
-    if (!venda) return;
-
-    const produto = produtosDisponiveis.find((item) => item.tipo === venda.produto);
-    if (produto) {
-      Array.from(produtoSelect.options).forEach((option) => {
-        if (option.value === produto.tipo) option.selected = true;
-      });
-      valorInput.value = produto.preco_venda;
+    if (!relatorios.length) {
+      reportsTable.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum relatório encontrado.</td></tr>';
+      return;
     }
 
-    document.getElementById("quantidade").value = venda.quantidade;
-    document.getElementById("cliente").value = venda.vendedor_id || "Cliente";
-    vendaEditandoId = id;
-    form.querySelector("button").textContent = "Salvar edição";
-    mostrarPagina("vendas");
-  } catch (error) {
-    console.error("Erro ao carregar venda para editar:", error);
-  }
-}
-
-async function apagarVenda(id) {
-  if (!confirm("Deseja remover esta venda?")) return;
-
-  try {
-    const resposta = await fetch(`/api/vendas/${id}`, { method: "DELETE" });
-    const dados = await resposta.json();
-    if (!resposta.ok) throw new Error(dados.error || "Erro ao apagar venda");
-    await carregarResumo();
-    alert(dados.message);
-  } catch (error) {
-    console.error(error);
-    alert(error.message);
-  }
-}
-
-produtoSelect.addEventListener("change", function () {
-  const option = produtoSelect.options[produtoSelect.selectedIndex];
-  const valor = option.getAttribute("data-valor");
-  const tipo = option.getAttribute("data-tipo");
-  const qtd = option.getAttribute("data-qtd") || "2";
-
-  valorInput.value = valor ? valor : "";
-
-  if (tipo === "combo") {
-    comboArea.style.display = "block";
-    comboSabores.innerHTML = "";
-
-    for (let i = 1; i <= Number(qtd); i++) {
-      comboSabores.innerHTML += `
-        <div style="margin-bottom:10px;">
-          <label>Sabor ${i}</label>
-          <select class="combo-sabor">
-            <option>Bueno</option>
-            <option>Nutella</option>
-            <option>Ninho</option>
-            <option>Ninho com Nutella</option>
-            <option>Morango</option>
-            <option>Morango com Nutella</option>
-            <option>Maracujá</option>
-            <option>Maracujá com Nutella</option>
-            <option>Paçoca</option>
-            <option>Brigadeiro</option>
-            <option>Beijinho</option>
-            <option>2 amores</option>
-            <option>Tradicional</option>
-          </select>
-        </div>
+    relatorios.forEach((item) => {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${item.data ? new Date(item.data).toLocaleDateString("pt-BR") : "-"}</td>
+        <td>${item.vendedor || "-"}</td>
+        <td>${formatarMoeda(item.faturamento)}</td>
+        <td>${formatarMoeda(item.lucro)}</td>
+        <td>${formatarMoeda(item.comissao)}</td>
       `;
-    }
-  } else {
-    comboArea.style.display = "none";
-    comboSabores.innerHTML = "";
+      reportsTable.appendChild(row);
+    });
+  } catch (error) {
+    console.error("Erro ao carregar relatórios:", error);
   }
+}
+
+addItemBtn.addEventListener("click", () => {
+  itensVendaListEl.appendChild(criarLinhaItem());
+});
+
+refreshReportsBtn.addEventListener("click", () => {
+  carregarRelatorios(periodoRelatorioEl.value);
+});
+
+periodoRelatorioEl.addEventListener("change", () => {
+  carregarRelatorios(periodoRelatorioEl.value);
 });
 
 form.addEventListener("submit", async function (e) {
   e.preventDefault();
 
-  const cliente = document.getElementById("cliente").value.trim();
-  const option = produtoSelect.options[produtoSelect.selectedIndex];
-  const tipo = option.getAttribute("data-tipo");
+  const nomeVendedor = document.getElementById("nomeVendedor").value.trim();
+  const dataFechamento = document.getElementById("dataFechamento").value;
+  const linhas = Array.from(itensVendaListEl.querySelectorAll(".item-row"));
 
-  let produto = option.value;
+  const itens = linhas
+    .map((linha) => {
+      const select = linha.querySelector(".produto-item");
+      const quantidade = Number(linha.querySelector(".item-quantidade").value || 0);
+      const valor = Number(linha.querySelector(".item-valor").value || 0);
+      const produto = select?.value;
 
-  if (tipo === "combo") {
-    const sabores = Array.from(document.querySelectorAll(".combo-sabor")).map((s) => s.value);
-    produto = `${produto} (${sabores.join(", ")})`;
-  }
+      if (!produto || !quantidade || quantidade <= 0) return null;
+      return { produto, quantidade, valor_unitario: valor };
+    })
+    .filter(Boolean);
 
-  const quantidade = Number(document.getElementById("quantidade").value);
-  const valor = Number(valorInput.value || option.getAttribute("data-valor") || 0);
-
-  if (!produto || !quantidade || quantidade <= 0) {
-    alert("Preencha o produto e a quantidade corretamente.");
+  if (!nomeVendedor || !itens.length) {
+    alert("Informe o nome do vendedor e pelo menos um item para registrar o fechamento.");
     return;
   }
 
   try {
-    if (vendaEditandoId) {
-      const resposta = await fetch(`/api/vendas/${vendaEditandoId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ produto_id: produtosDisponiveis.find((item) => item.tipo === produto)?.id || 1, quantidade })
-      });
-      const dados = await resposta.json();
-      if (!resposta.ok) throw new Error(dados.error || "Erro ao editar venda");
-      alert(dados.message);
-    } else {
-      const resposta = await fetch("/api/vendas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          vendedor_id: 1,
-          tipo_relatorio: "diario",
-          itens: [{ produto, quantidade, valor_unitario: valor }],
-          cliente
-        })
-      });
+    const resposta = await fetch("/api/fechamentos-diarios", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nome_vendedor: nomeVendedor,
+        data_emissao: dataFechamento || null,
+        itens,
+      }),
+    });
 
-      const dados = await resposta.json();
-      if (!resposta.ok) throw new Error(dados.error || "Erro ao registrar venda");
-      totalVendasHoje = Number(dados.relatorio?.faturamento || totalVendasHoje + quantidade * valor);
-      atualizarVendasHoje();
-      alert(dados.message);
-    }
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.error || "Erro ao registrar fechamento diário");
 
-    await carregarResumo();
+    alert(dados.message);
     form.reset();
-    valorInput.value = "";
-    comboArea.style.display = "none";
-    comboSabores.innerHTML = "";
-    vendaEditandoId = null;
-    form.querySelector("button").textContent = "Registrar venda";
+    renderizarItens();
+    await carregarResumo();
+    await carregarRelatorios(periodoRelatorioEl.value);
   } catch (error) {
     console.error(error);
     alert(error.message);
   }
 });
 
-/* abre dashboard ao iniciar */
 document.addEventListener("DOMContentLoaded", async () => {
   mostrarPagina("dashboard");
   await carregarProdutos();
   await carregarResumo();
+  await carregarRelatorios("diario");
 });

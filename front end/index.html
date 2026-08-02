@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-br">
 <head>
   <meta charset="UTF-8" />
@@ -10,300 +10,100 @@
 </head>
 
 <body>
-
-  <!-- SIDEBAR -->
   <div class="sidebar">
     <h2>🍬 Doces</h2>
-
     <a href="#" onclick="mostrarPagina('dashboard')">🏠 Dashboard</a>
     <a href="#" onclick="mostrarPagina('produtos')">🍫 Produtos</a>
-    <a href="#" onclick="mostrarPagina('vendas')">🧾 Vendas</a>
+    <a href="#" onclick="mostrarPagina('vendas')">🧾 Fechamento</a>
     <a href="#" onclick="mostrarPagina('historico')">📊 Relatórios</a>
   </div>
 
-  <!-- CONTEÚDO -->
   <div class="main">
-
     <header class="topbar">
       <h1>Olá! Bem-vinda ao sistema 🍬</h1>
-      <p>Resumo das suas vendas</p>
+      <p>Resumo consolidado das vendas do dia</p>
     </header>
 
-    <!-- CARDS -->
     <section class="cards page" id="dashboard">
-
       <div class="card">
-        <h3>Vendas hoje</h3>
+        <h3>Faturamento do dia</h3>
         <p id="vendasHoje">R$ 0,00</p>
       </div>
-
       <div class="card">
-        <h3>Produtos</h3>
-        <p>Cones e trufas</p>
+        <h3>Vendedores</h3>
+        <p id="clientesCadastrados">0 vendedores</p>
       </div>
-
       <div class="card">
-        <h3>Clientes</h3>
-        <p id="clientesCadastrados">0 clientes</p>
-      </div>
-
-      <div class="card">
-        <h3>Mais vendido da semana</h3>
+        <h3>Mais vendido</h3>
         <p id="maisVendido">Nenhuma venda registrada</p>
       </div>
-
+      <div class="card">
+        <h3>Catálogo</h3>
+        <p>Produtos e mão de obra</p>
+      </div>
     </section>
 
-    <!-- PRODUTOS -->
     <section class="page" id="produtos">
-    
       <div class="produtos-header">
-        <h2>🍫 Produtos</h2>
-        <p>Catálogo de doces disponíveis para venda</p>
+        <h2>🍫 Produtos e serviços</h2>
+        <p>Preços e categorias carregados diretamente do banco.</p>
       </div>
-    
-      <div class="produtos-grid">
-    
-        <div class="produto-card">
-          <h3>🍫 Cones Trufados</h3>
-    
-          <ul>
-            <li>Bueno</li>
-            <li>Nutella</li>
-            <li>Ninho</li>
-            <li>Ninho com Nutella</li>
-            <li>Morango</li>
-            <li>Morango com Nutella</li>
-            <li>Maracujá</li>
-            <li>Maracujá com Nutella</li>
-            <li>Paçoca</li>
-            <li>Brigadeiro</li>
-            <li>Beijinho</li>
-            <li>2 amores</li>
-            <li>Tradicional</li>
-          </ul>
-    
-          <span>Valor: R$ 12,00</span>
-        </div>
-    
-        <div class="produto-card">
-          <h3>🍬 Trufas e Bombons</h3>
-    
-          <ul>
-            <li>Bueno</li>
-            <li>Nutella</li>
-            <li>Ninho</li>
-            <li>Ninho com Nutella</li>
-            <li>Morango</li>
-            <li>Morango com Nutella</li>
-            <li>Maracujá</li>
-            <li>Maracujá com Nutella</li>
-            <li>Paçoca</li>
-            <li>Brigadeiro</li>
-            <li>Beijinho</li>
-            <li>2 amores</li>
-            <li>Tradicional</li>
-          </ul>
-    
-          <span>Valor: R$ 6,00</span>
-        </div>
-    
-        <div class="produto-card">
-          <h3>🎁 Combos</h3>
-    
-          <ul>
-            <li>2 Cones</li>
-            <li>3 Trufas</li>
-            <li>Cone + Trufa</li>
-            <li>2 Cones + 2 Trufas</li>
-          </ul>
-    
-          <span>Combos promocionais</span>
-          
-        </div>
-    
-      </div>
-    
+      <div id="catalogoProdutos" class="produtos-grid"></div>
+
       <div class="estoque-card">
-    
-        <h2>📦 Estoque de Ingredientes</h2>
-    
-        <table class="estoque-table">
-    
-          <thead>
-            <tr>
-              <th>Ingrediente</th>
-              <th>Quantidade</th>
-            </tr>
-          </thead>
-    
-          <tbody>
-    
-            <tr>
-              <td>Chocolate ao leite</td>
-              <td>1 pacote</td>
-              <td>R$ 60,00</td>
-            </tr>
-    
-            <tr>
-              <td>Chocolate branco</td>
-              <td>2,05kg</td>
-            </tr>
-    
-            <tr>
-              <td>Leite condensado</td>
-              <td>---</td>
-            </tr>
-    
-            <tr>
-              <td>Creme de leite</td>
-              <td>---</td>
-            </tr>
-    
-            <tr>
-              <td>Nutella</td>
-              <td>1,01kg</td>
-            </tr>
-
-            <tr>
-              <td>Ninho</td>
-              <td>1,01kg</td>
-            </tr>
-
-            <tr>
-              <td>Morango</td>
-              <td>1,01kg</td>
-            </tr>
-
-            <tr>
-              <td>Bueno</td>
-              <td>1,01kg</td>
-            </tr>
-
-            <tr>
-              <td>Pó para recheio</td>
-              <td>---</td>
-            </tr>
-
-            <tr>
-              <td>Caixa de casquinhas</td>
-              <td>300 unidades</td>
-            </tr>
-
-            <tr>
-              <td>Caixa de paçoca</td>
-              <td>100 unidades</td>
-            </tr>
-
-            <tr>
-              <td>Embalagem</td>
-              <td>100 unidades</td>
-            </tr>
-
-            <tr>
-              <td>Etiquetas</td>
-              <td>100 unidades</td>
-            </tr>
-    
-          </tbody>
-    
-        </table>
-    
+        <h2>📦 Estoque e valores</h2>
+        <p>Os itens de mão de obra e os produtos do catálogo são atualizados automaticamente no fechamento diário.</p>
       </div>
-    
     </section>
-    
-    <!-- FORMULÁRIO -->
+
     <section class="form-section page" id="vendas">
+      <h2>Fechamento diário</h2>
+      <p>Registre o vendedor do dia e todos os itens vendidos em um único lançamento.</p>
 
-      <h2>Registrar venda</h2>
-
-      <form id="saleForm">
-
-        <input type="text" id="cliente" placeholder="Nome do cliente" required>
-
-        <select id="produto" required>
-          <option value="">Selecione o produto</option>
-
-          <optgroup label="🍫 Cones">
-            <option data-valor="12">Bueno</option>
-            <option data-valor="12">Nutella</option>
-            <option data-valor="12">Ninho</option>
-            <option data-valor="12">Ninho com Nutella</option>
-            <option data-valor="12">Morango</option>
-            <option data-valor="12">Morango com Nutella</option>
-            <option data-valor="12">Maracujá</option>
-            <option data-valor="12">Maracujá com Nutella</option>
-            <option data-valor="12">Paçoca</option>
-            <option data-valor="12">Brigadeiro</option>
-            <option data-valor="12">Beijinho</option>
-            <option data-valor="12">2 amores</option>
-            <option data-valor="12">Tradicional</option>
-          </optgroup>
-
-          <optgroup label="🍬 Trufas e Bombons">
-            <option data-valor="6">Bueno</option>
-            <option data-valor="6">Nutella</option>
-            <option data-valor="6">Ninho</option>
-            <option data-valor="6">Ninho com Nutella</option>
-            <option data-valor="6">Morango</option>
-            <option data-valor="6">Morango com Nutella</option>
-            <option data-valor="6">Maracujá</option>
-            <option data-valor="6">Maracujá com Nutella</option>
-            <option data-valor="6">Paçoca</option>
-            <option data-valor="6">Brigadeiro</option>
-            <option data-valor="6">Beijinho</option>
-            <option data-valor="6">2 amores</option>
-            <option data-valor="6">Tradicional</option>
-          </optgroup>
-
-          <optgroup label="🎁 Combos">
-            <option data-valor="22" data-tipo="combo" data-qtd="2">2 cones</option>
-            <option data-valor="16" data-tipo="combo" data-qtd="3">3 trufas</option>
-            <option data-valor="17" data-tipo="combo" data-qtd="2">Cone + trufa</option>
-            <option data-valor="34" data-tipo="combo" data-qtd="4">2 cones + 2 trufas</option>
-          </optgroup>
-
-        </select>
-
-        <input type="number" id="quantidade" placeholder="Quantidade" required>
-
-        <input type="number" id="valor" placeholder="Valor unitário" readonly>
-
-        <!-- COMBO -->
-        <div id="comboArea" style="display:none; margin-top:10px;">
-          <h3>Monte seu combo 🎁</h3>
-          <div id="comboSabores"></div>
+      <form id="closureForm">
+        <div class="full-width">
+          <label for="nomeVendedor">Nome do vendedor do dia</label>
+          <input type="text" id="nomeVendedor" placeholder="Ex.: Ana" required>
         </div>
 
-        <button type="submit">Registrar venda</button>
+        <div class="full-width">
+          <label for="dataFechamento">Data do fechamento</label>
+          <input type="date" id="dataFechamento">
+        </div>
 
+        <div id="itensVendaList" class="itens-list"></div>
+
+        <div class="full-width actions">
+          <button type="button" id="addItemBtn">+ Adicionar item</button>
+          <button type="submit">Registrar fechamento diário</button>
+        </div>
       </form>
-
     </section>
 
-    <!-- TABELA -->
     <section class="table-section page" id="historico">
-
-      <h2>Últimas vendas</h2>
+      <h2>Relatórios</h2>
+      <div class="relatorios-controls">
+        <select id="periodoRelatorio">
+          <option value="diario">Diário</option>
+          <option value="semanal">Semanal</option>
+          <option value="mensal">Mensal</option>
+        </select>
+        <button type="button" id="refreshReportsBtn">Atualizar</button>
+      </div>
 
       <table>
         <thead>
           <tr>
-            <th>Cliente</th>
-            <th>Produto</th>
-            <th>Quantidade</th>
-            <th>Total</th>
-            <th>Ações</th>
+            <th>Período</th>
+            <th>Vendedor</th>
+            <th>Faturamento</th>
+            <th>Lucro</th>
+            <th>Comissão</th>
           </tr>
         </thead>
-
-        <tbody id="salesTable"></tbody>
-
+        <tbody id="reportsTable"></tbody>
       </table>
-
     </section>
-
   </div>
 
   <script src="script.js"></script>
