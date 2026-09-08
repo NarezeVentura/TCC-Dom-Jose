@@ -26,20 +26,25 @@ Estrutura do projeto
 
 Como executar
 
-1. Entre na pasta do projeto.
-2. Instale as dependências do projeto:
-   ```bash
-   py -m pip install -r requirements.txt
-   ```
-   Se o comando `py` não estiver disponível, use `python -m pip install -r requirements.txt`.
-3. Inicie o backend:
-   ```bash
-   python app.py
-   ```
-4. Acesse no navegador:
-   ```text
-   http://127.0.0.1:5000
-   ```
+No Windows, abra o PowerShell dentro da pasta do projeto e execute os comandos abaixo, na ordem:
+
+```powershell
+py -m pip install -r requirements.txt
+py app.py
+```
+
+Depois, abra este endereço no navegador:
+
+```text
+http://127.0.0.1:5000
+```
+
+Se o comando `py` não funcionar, use estes comandos no lugar:
+
+```powershell
+python -m pip install -r requirements.txt
+python app.py
+```
 
 Observações
 
