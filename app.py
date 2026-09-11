@@ -12,6 +12,7 @@ db_path = os.environ.get("DB_PATH", os.path.join(BASE_DIR, "sistema_vendas.db"))
 CATALOGO_PRODUTOS = [
     ("Trufas", 2.20, 6.00, "Trufas"),
     ("Cones", 3.50, 12.00, "Cones"),
+    
     ("Cone + Trufa", 5.70, 17.00, "Combo"),
     ("Combo 2 Cones", 7.00, 22.00, "Combo"),
     ("Combo 3 Trufas", 6.60, 16.00, "Combo"),
@@ -119,6 +120,16 @@ def init_db():
                 produto,
             )
 
+    for tipo, preco_producao, preco_venda, categoria in CATALOGO_PRODUTOS:
+        cursor.execute(
+            """
+            UPDATE produtos
+            SET tipo = ?, preco_producao = ?, preco_venda = ?, categoria = ?
+            WHERE lower(tipo) = lower(?)
+            """,
+            (tipo, preco_producao, preco_venda, categoria, tipo),
+        )
+
     cursor.execute(
         "DELETE FROM produtos WHERE categoria = ? OR lower(tipo) LIKE ? OR lower(tipo) LIKE ?",
         ("Mão de obra", "mão de obra%", "mao de obra%"),
@@ -191,12 +202,13 @@ def listar_vendedores():
 def listar_produtos():
     conn = get_connection()
     placeholders = ", ".join("?" for _ in NOMES_CATALOGO)
+    nomes_catalogo_normalizados = tuple(nome.lower() for nome in NOMES_CATALOGO)
     produtos = conn.execute(
         f"SELECT id_produto, tipo, preco_producao, preco_venda, categoria FROM produtos "
-        f"WHERE tipo IN ({placeholders}) ORDER BY CASE tipo "
+        f"WHERE lower(tipo) IN ({placeholders}) ORDER BY CASE lower(tipo) "
         + " ".join(f"WHEN ? THEN {indice}" for indice, _ in enumerate(NOMES_CATALOGO))
         + " END",
-        (*NOMES_CATALOGO, *NOMES_CATALOGO),
+        (*nomes_catalogo_normalizados, *nomes_catalogo_normalizados),
     ).fetchall()
     conn.close()
     return jsonify(

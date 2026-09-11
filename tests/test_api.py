@@ -55,6 +55,17 @@ class TestFluxoFechamentoDiario(unittest.TestCase):
             ],
         )
 
+    def test_catalogo_normaliza_nome_do_combo_com_trufa(self):
+        conn = self.app_module.get_connection()
+        conn.execute("UPDATE produtos SET tipo = 'Cone + trufa' WHERE tipo = 'Cone + Trufa'")
+        conn.commit()
+        conn.close()
+
+        self.app_module.init_db()
+        response = self.client.get("/api/produtos")
+
+        self.assertIn("Cone + Trufa", [produto["tipo"] for produto in response.get_json()])
+
 
 if __name__ == "__main__":
     unittest.main()
