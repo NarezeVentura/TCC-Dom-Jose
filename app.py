@@ -9,6 +9,18 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 frontend_dir = os.path.join(BASE_DIR, "front end")
 db_path = os.environ.get("DB_PATH", os.path.join(BASE_DIR, "sistema_vendas.db"))
 
+CATALOGO_PRODUTOS = [
+    ("Trufas", 2.20, 6.00, "Trufas"),
+    ("Cones", 3.50, 12.00, "Cones"),
+    ("Cone + Trufa", 5.70, 17.00, "Combo"),
+    ("Combo 2 Cones", 7.00, 22.00, "Combo"),
+    ("Combo 3 Trufas", 6.60, 16.00, "Combo"),
+    ("2 Cones + Trufa", 8.70, 27.00, "Combo"),
+    ("Cone + 2 Trufas", 7.90, 24.00, "Combo"),
+    ("2 Cones + 2 Trufas", 11.40, 32.00, "Combo"),
+]
+NOMES_CATALOGO = tuple(produto[0] for produto in CATALOGO_PRODUTOS)
+
 app = Flask(__name__, static_folder=frontend_dir, static_url_path="/")
 
 
@@ -99,17 +111,7 @@ def init_db():
         cursor.execute("INSERT INTO vendedores (nome) VALUES ('Pedro')")
         cursor.execute("INSERT INTO vendedores (nome) VALUES ('Nicole')")
 
-    produtos_seed = [
-        ("Cone Tradicional", 3.50, 12.00, "Cone"),
-        ("Cone de Nutella", 3.50, 12.00, "Cone"),
-        ("Trufa", 2.20, 6.00, "Trufa"),
-        ("Trufa de Nutella", 2.20, 6.00, "Trufa"),
-        ("Combo Cone + Trufa", 5.70, 17.00, "Combo"),
-        ("Combo 2 Cones", 7.00, 22.00, "Combo"),
-        ("Combo 3 Trufas", 6.60, 16.00, "Combo"),
-        ("Combo 2 Cones + 2 Trufas", 11.40, 32.00, "Combo"),
-    ]
-    for produto in produtos_seed:
+    for produto in CATALOGO_PRODUTOS:
         cursor.execute("SELECT 1 FROM produtos WHERE lower(tipo) = lower(?)", (produto[0],))
         if cursor.fetchone() is None:
             cursor.execute(
@@ -188,9 +190,13 @@ def listar_vendedores():
 @app.route("/api/produtos", methods=["GET"])
 def listar_produtos():
     conn = get_connection()
+    placeholders = ", ".join("?" for _ in NOMES_CATALOGO)
     produtos = conn.execute(
-        "SELECT id_produto, tipo, preco_producao, preco_venda, categoria FROM produtos WHERE categoria != ? AND lower(tipo) NOT LIKE ? AND lower(tipo) NOT LIKE ? ORDER BY id_produto",
-        ("Mão de obra", "mão de obra%", "mao de obra%"),
+        f"SELECT id_produto, tipo, preco_producao, preco_venda, categoria FROM produtos "
+        f"WHERE tipo IN ({placeholders}) ORDER BY CASE tipo "
+        + " ".join(f"WHEN ? THEN {indice}" for indice, _ in enumerate(NOMES_CATALOGO))
+        + " END",
+        (*NOMES_CATALOGO, *NOMES_CATALOGO),
     ).fetchall()
     conn.close()
     return jsonify(

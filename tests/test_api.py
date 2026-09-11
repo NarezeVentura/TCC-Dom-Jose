@@ -37,6 +37,24 @@ class TestFluxoFechamentoDiario(unittest.TestCase):
         self.assertGreater(data["relatorio"]["faturamento"], 0)
         self.assertGreater(data["relatorio"]["lucro"], 0)
 
+    def test_catalogo_contem_apenas_opcoes_padronizadas(self):
+        response = self.client.get("/api/produtos")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [produto["tipo"] for produto in response.get_json()],
+            [
+                "Trufas",
+                "Cones",
+                "Cone + Trufa",
+                "Combo 2 Cones",
+                "Combo 3 Trufas",
+                "2 Cones + Trufa",
+                "Cone + 2 Trufas",
+                "2 Cones + 2 Trufas",
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
