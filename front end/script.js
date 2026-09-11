@@ -62,12 +62,20 @@ function criarLinhaItem(item = {}) {
       <option value="">Selecione o produto</option>
     </select>
     <input type="number" class="item-quantidade" min="1" value="${item.quantidade || 1}" placeholder="Quantidade" required>
-    <input type="number" class="item-valor" step="0.01" placeholder="Valor unitário" readonly>
+    <input type="number" class="item-valor" step="0.01" placeholder="Total" readonly>
     <button type="button" class="remove-item-btn">Remover</button>
   `;
 
   const select = row.querySelector(".produto-item");
+  const quantidadeEl = row.querySelector(".item-quantidade");
   const valorEl = row.querySelector(".item-valor");
+
+  function atualizarTotal() {
+    const selected = select.options[select.selectedIndex];
+    const valorUnitario = Number(selected?.getAttribute("data-valor") || 0);
+    const quantidade = Number(quantidadeEl.value || 0);
+    valorEl.value = valorUnitario && quantidade > 0 ? (valorUnitario * quantidade).toFixed(2) : "";
+  }
 
   produtosDisponiveis.forEach((produto) => {
     const option = document.createElement("option");
@@ -81,14 +89,15 @@ function criarLinhaItem(item = {}) {
     select.value = item.produto;
     const selected = Array.from(select.options).find((option) => option.value === item.produto);
     if (selected) {
-      valorEl.value = selected.getAttribute("data-valor") || item.valor_unitario || "";
+      atualizarTotal();
     }
   }
 
   select.addEventListener("change", () => {
-    const selected = select.options[select.selectedIndex];
-    valorEl.value = selected?.getAttribute("data-valor") || "";
+    atualizarTotal();
   });
+
+  quantidadeEl.addEventListener("input", atualizarTotal);
 
   row.querySelector(".remove-item-btn").addEventListener("click", () => {
     row.remove();
@@ -228,8 +237,8 @@ form.addEventListener("submit", async function (e) {
     .map((linha) => {
       const select = linha.querySelector(".produto-item");
       const quantidade = Number(linha.querySelector(".item-quantidade").value || 0);
-      const valor = Number(linha.querySelector(".item-valor").value || 0);
       const produto = select?.value;
+      const valor = Number(select?.options[select.selectedIndex]?.getAttribute("data-valor") || 0);
 
       if (!produto || !quantidade || quantidade <= 0) return null;
       return { produto, quantidade, valor_unitario: valor };
