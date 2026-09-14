@@ -1,10 +1,20 @@
-﻿const catalogoProdutosEl = document.getElementById("catalogoProdutos");
+﻿const catalogoProdutosVendaEl = document.getElementById("catalogoProdutosVenda");
+const catalogoMateriaPrimaEl = document.getElementById("catalogoMateriaPrima");
 const itensVendaListEl = document.getElementById("itensVendaList");
 const form = document.getElementById("closureForm");
 const reportsTable = document.getElementById("reportsTable");
 const periodoRelatorioEl = document.getElementById("periodoRelatorio");
 const addItemBtn = document.getElementById("addItemBtn");
 const refreshReportsBtn = document.getElementById("refreshReportsBtn");
+const produtoForm = document.getElementById("produtoForm");
+const produtosTableEl = document.getElementById("produtosTable");
+const cancelarProdutoBtn = document.getElementById("cancelarProdutoBtn");
+const vendedorForm = document.getElementById("vendedorForm");
+const vendedoresTableEl = document.getElementById("vendedoresTable");
+const cancelarVendedorBtn = document.getElementById("cancelarVendedorBtn");
+const vendedorSelectEl = document.getElementById("nomeVendedor");
+const CATEGORIA_VENDA = "Produtos para venda";
+const CATEGORIA_MATERIA_PRIMA = "Matéria prima";
 
 const maisVendidoEl = document.getElementById("maisVendido");
 const vendasHojeEl = document.getElementById("vendasHoje");
@@ -16,6 +26,23 @@ let produtosDisponiveis = [];
 
 function formatarMoeda(valor) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(valor || 0));
+}
+
+function escaparHtml(valor) {
+  return String(valor ?? "").replace(/[&<>'"]/g, (caractere) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "'": "&#39;",
+    '"': "&quot;",
+  }[caractere]));
+}
+
+async function requisicaoJson(url, opcoes = {}) {
+  const resposta = await fetch(url, opcoes);
+  const dados = await resposta.json();
+  if (!resposta.ok) throw new Error(dados.error || "Não foi possível concluir a operação");
+  return dados;
 }
 
 function mostrarPagina(pagina) {
@@ -33,11 +60,10 @@ function mostrarPagina(pagina) {
   }
 }
 
-function preencherCatalogo(produtos) {
-  catalogoProdutosEl.innerHTML = "";
-
+function renderizarGrupoCatalogo(elemento, produtos) {
+  elemento.innerHTML = "";
   if (!produtos.length) {
-    catalogoProdutosEl.innerHTML = '<p class="empty-state">Nenhum produto cadastrado ainda.</p>';
+    elemento.innerHTML = '<p class="empty-state">Nenhum produto cadastrado ainda.</p>';
     return;
   }
 
@@ -50,8 +76,133 @@ function preencherCatalogo(produtos) {
       <span>Venda: ${formatarMoeda(produto.preco_venda)}</span>
       <small>Produção: ${formatarMoeda(produto.preco_producao)}</small>
     `;
-    catalogoProdutosEl.appendChild(card);
+    elemento.appendChild(card);
   });
+}
+
+function preencherCatalogo(produtos) {
+  renderizarGrupoCatalogo(
+    catalogoProdutosVendaEl,
+    produtos.filter((produto) => produto.categoria === CATEGORIA_VENDA),
+  );
+  renderizarGrupoCatalogo(
+    catalogoMateriaPrimaEl,
+    produtos.filter((produto) => produto.categoria === CATEGORIA_MATERIA_PRIMA),
+  );
+}
+
+function renderizarTabelaProdutos(produtos) {
+  produtosTableEl.innerHTML = produtos.length ? produtos.map((produto) => `
+    <tr>
+      <td>${escaparHtml(produto.tipo)}</td>
+      <td>${escaparHtml(produto.categoria || "Geral")}</td>
+      <td>${formatarMoeda(produto.preco_producao)}</td>
+      <td>${formatarMoeda(produto.preco_venda)}</td>
+      <td class="row-actions">
+        <button type="button" class="edit-product-btn" data-id="${produto.id}">Editar</button>
+        <button type="button" class="delete-product-btn remove-item-btn" data-id="${produto.id}">Excluir</button>
+      </td>
+    </tr>
+  `).join("") : '<tr><td colspan="5" class="empty-state">Nenhum produto cadastrado.</td></tr>';
+
+  produtosTableEl.querySelectorAll(".edit-product-btn").forEach((botao) => {
+    botao.addEventListener("click", () => iniciarEdicaoProduto(produtos.find((produto) => produto.id === Number(botao.dataset.id))));
+  });
+  produtosTableEl.querySelectorAll(".delete-product-btn").forEach((botao) => {
+    botao.addEventListener("click", () => excluirProduto(Number(botao.dataset.id)));
+  });
+}
+
+function limparFormularioProduto() {
+  produtoForm.reset();
+  document.getElementById("produtoId").value = "";
+  document.getElementById("produtoCategoria").value = CATEGORIA_VENDA;
+  document.getElementById("salvarProdutoBtn").textContent = "Adicionar produto";
+  cancelarProdutoBtn.hidden = true;
+}
+
+function iniciarEdicaoProduto(produto) {
+  if (!produto) return;
+  document.getElementById("produtoId").value = produto.id;
+  document.getElementById("produtoTipo").value = produto.tipo;
+  document.getElementById("produtoPrecoProducao").value = produto.preco_producao;
+  document.getElementById("produtoPrecoVenda").value = produto.preco_venda;
+  document.getElementById("produtoCategoria").value = produto.categoria || "geral";
+  document.getElementById("salvarProdutoBtn").textContent = "Salvar alterações";
+  cancelarProdutoBtn.hidden = false;
+  document.getElementById("produtoTipo").focus();
+}
+
+async function excluirProduto(id) {
+  if (!window.confirm("Deseja excluir este produto?")) return;
+  try {
+    await requisicaoJson(`/api/produtos/${id}`, { method: "DELETE" });
+    await carregarProdutos();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+function renderizarTabelaVendedores(vendedores) {
+  vendedoresTableEl.innerHTML = vendedores.length ? vendedores.map((vendedor) => `
+    <tr>
+      <td>${escaparHtml(vendedor.nome)}</td>
+      <td class="row-actions">
+        <button type="button" class="edit-seller-btn" data-id="${vendedor.id}">Editar</button>
+        <button type="button" class="delete-seller-btn remove-item-btn" data-id="${vendedor.id}">Excluir</button>
+      </td>
+    </tr>
+  `).join("") : '<tr><td colspan="2" class="empty-state">Nenhum vendedor cadastrado.</td></tr>';
+
+  vendedoresTableEl.querySelectorAll(".edit-seller-btn").forEach((botao) => {
+    botao.addEventListener("click", () => iniciarEdicaoVendedor(vendedores.find((vendedor) => vendedor.id === Number(botao.dataset.id))));
+  });
+  vendedoresTableEl.querySelectorAll(".delete-seller-btn").forEach((botao) => {
+    botao.addEventListener("click", () => excluirVendedor(Number(botao.dataset.id)));
+  });
+}
+
+function limparFormularioVendedor() {
+  vendedorForm.reset();
+  document.getElementById("vendedorId").value = "";
+  document.getElementById("salvarVendedorBtn").textContent = "Adicionar vendedor";
+  cancelarVendedorBtn.hidden = true;
+}
+
+function iniciarEdicaoVendedor(vendedor) {
+  if (!vendedor) return;
+  document.getElementById("vendedorId").value = vendedor.id;
+  document.getElementById("vendedorNome").value = vendedor.nome;
+  document.getElementById("salvarVendedorBtn").textContent = "Salvar alterações";
+  cancelarVendedorBtn.hidden = false;
+  document.getElementById("vendedorNome").focus();
+}
+
+async function carregarVendedores() {
+  try {
+    const vendedores = await requisicaoJson("/api/vendedores");
+    renderizarTabelaVendedores(vendedores);
+    vendedorSelectEl.innerHTML = '<option value="">Selecione um vendedor</option>';
+    vendedores.forEach((vendedor) => {
+      const option = document.createElement("option");
+      option.value = vendedor.nome;
+      option.textContent = vendedor.nome;
+      vendedorSelectEl.appendChild(option);
+    });
+    clientesCadastradosEl.textContent = `${vendedores.length} vendedores`;
+  } catch (error) {
+    console.error("Erro ao carregar vendedores:", error);
+  }
+}
+
+async function excluirVendedor(id) {
+  if (!window.confirm("Deseja excluir este vendedor?")) return;
+  try {
+    await requisicaoJson(`/api/vendedores/${id}`, { method: "DELETE" });
+    await carregarVendedores();
+  } catch (error) {
+    alert(error.message);
+  }
 }
 
 function criarLinhaItem(item = {}) {
@@ -150,7 +301,8 @@ async function carregarProdutos() {
   try {
     const resposta = await fetch("/api/produtos");
     const produtos = await resposta.json();
-    produtosDisponiveis = produtos;
+    renderizarTabelaProdutos(produtos);
+    produtosDisponiveis = produtos.filter((produto) => produto.categoria === CATEGORIA_VENDA);
     preencherCatalogo(produtos);
     renderizarItens();
   } catch (error) {
@@ -226,6 +378,49 @@ periodoRelatorioEl.addEventListener("change", () => {
   carregarRelatorios(periodoRelatorioEl.value);
 });
 
+produtoForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = document.getElementById("produtoId").value;
+  const dados = {
+    tipo: document.getElementById("produtoTipo").value.trim(),
+    preco_producao: Number(document.getElementById("produtoPrecoProducao").value),
+    preco_venda: Number(document.getElementById("produtoPrecoVenda").value),
+    categoria: document.getElementById("produtoCategoria").value.trim() || "geral",
+  };
+  try {
+    await requisicaoJson(id ? `/api/produtos/${id}` : "/api/produtos", {
+      method: id ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dados),
+    });
+    limparFormularioProduto();
+    await carregarProdutos();
+  } catch (error) {
+    alert(error.message);
+  }
+});
+
+cancelarProdutoBtn.addEventListener("click", limparFormularioProduto);
+
+vendedorForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = document.getElementById("vendedorId").value;
+  const dados = { nome: document.getElementById("vendedorNome").value.trim() };
+  try {
+    await requisicaoJson(id ? `/api/vendedores/${id}` : "/api/vendedores", {
+      method: id ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dados),
+    });
+    limparFormularioVendedor();
+    await carregarVendedores();
+  } catch (error) {
+    alert(error.message);
+  }
+});
+
+cancelarVendedorBtn.addEventListener("click", limparFormularioVendedor);
+
 form.addEventListener("submit", async function (e) {
   e.preventDefault();
 
@@ -278,6 +473,7 @@ form.addEventListener("submit", async function (e) {
 document.addEventListener("DOMContentLoaded", async () => {
   mostrarPagina("dashboard");
   await carregarProdutos();
+  await carregarVendedores();
   await carregarResumo();
   await carregarRelatorios("diario");
 });

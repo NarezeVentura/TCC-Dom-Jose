@@ -21,7 +21,7 @@ class TestFluxoFechamentoDiario(unittest.TestCase):
 
     def test_registro_de_fechamento_diario_gera_relatorio(self):
         payload = {
-            "nome_vendedor": "Ana",
+            "nome_vendedor": "Pedro",
             "itens": [
                 {"produto": "Cone Tradicional", "quantidade": 2, "valor_unitario": 12.0},
                 {"produto": "Trufa", "quantidade": 3, "valor_unitario": 6.0},
@@ -32,7 +32,7 @@ class TestFluxoFechamentoDiario(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
-        self.assertEqual(data["fechamento"]["nome_vendedor"], "Ana")
+        self.assertEqual(data["fechamento"]["nome_vendedor"], "Pedro")
         self.assertEqual(data["fechamento"]["total_faturamento"], 42.0)
         self.assertGreater(data["relatorio"]["faturamento"], 0)
         self.assertGreater(data["relatorio"]["lucro"], 0)
@@ -65,6 +65,63 @@ class TestFluxoFechamentoDiario(unittest.TestCase):
         response = self.client.get("/api/produtos")
 
         self.assertIn("Cone + Trufa", [produto["tipo"] for produto in response.get_json()])
+
+    def test_crud_de_vendedor(self):
+        criado = self.client.post("/api/vendedores", json={"nome": "Marina"})
+        self.assertEqual(criado.status_code, 201)
+        vendedor = criado.get_json()
+
+        editado = self.client.put(f"/api/vendedores/{vendedor['id']}", json={"nome": "Marina Silva"})
+        self.assertEqual(editado.status_code, 200)
+        self.assertEqual(editado.get_json()["nome"], "Marina Silva")
+
+        excluido = self.client.delete(f"/api/vendedores/{vendedor['id']}")
+        self.assertEqual(excluido.status_code, 200)
+
+    def test_crud_de_produto(self):
+        criado = self.client.post(
+            "/api/produtos",
+            json={
+                "tipo": "Brigadeiro",
+                "preco_producao": 1.5,
+                "preco_venda": 5,
+                "categoria": "Matéria prima",
+            },
+        )
+        self.assertEqual(criado.status_code, 201)
+        produto = criado.get_json()
+
+        editado = self.client.put(
+            f"/api/produtos/{produto['id']}",
+            json={"tipo": "Brigadeiro especial", "preco_venda": 6},
+        )
+        self.assertEqual(editado.status_code, 200)
+        self.assertEqual(editado.get_json()["preco_venda"], 6)
+
+        listado = self.client.get("/api/produtos").get_json()
+        self.assertIn("Brigadeiro especial", [item["tipo"] for item in listado])
+
+        excluido = self.client.delete(f"/api/produtos/{produto['id']}")
+        self.assertEqual(excluido.status_code, 200)
+
+    def test_fechamento_rejeita_vendedor_inexistente(self):
+        response = self.client.post(
+            "/api/fechamentos-diarios",
+            json={
+                "nome_vendedor": "Vendedor que não existe",
+                "itens": [{"produto": "Trufa", "quantidade": 1, "valor_unitario": 6}],
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_produto_rejeita_categoria_fora_da_lista_fixa(self):
+        response = self.client.post(
+            "/api/produtos",
+            json={"tipo": "Produto inválido", "preco_producao": 1, "preco_venda": 2, "categoria": "Doces"},
+        )
+
+        self.assertEqual(response.status_code, 400)
 
 
 if __name__ == "__main__":

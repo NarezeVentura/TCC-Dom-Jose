@@ -13,6 +13,7 @@
   <div class="sidebar">
     <h2>🍬 Doces</h2>
     <a href="#" onclick="mostrarPagina('dashboard')">🏠 Dashboard</a>
+    <a href="#" onclick="mostrarPagina('vendedores')">👥 Vendedores</a>
     <a href="#" onclick="mostrarPagina('produtos')">🍫 Produtos</a>
     <a href="#" onclick="mostrarPagina('vendas')">🧾 Fechamento</a>
     <a href="#" onclick="mostrarPagina('historico')">📊 Relatórios</a>
@@ -39,7 +40,7 @@
       </div>
       <div class="card">
         <h3>Catálogo</h3>
-        <p>Produtos e mão de obra</p>
+        <p>Produtos e matérias-primas</p>
       </div>
     </section>
 
@@ -48,11 +49,63 @@
         <h2>🍫 Produtos e serviços</h2>
         <p>Preços e categorias carregados diretamente do banco.</p>
       </div>
-      <div id="catalogoProdutos" class="produtos-grid"></div>
+      <div class="management-panel">
+        <h3>Gerenciar produtos</h3>
+        <form id="produtoForm" class="management-form">
+          <input type="hidden" id="produtoId">
+          <label>Nome<input type="text" id="produtoTipo" required></label>
+          <label>Preço de produção<input type="number" id="produtoPrecoProducao" min="0" step="0.01" required></label>
+          <label>Preço de venda<input type="number" id="produtoPrecoVenda" min="0.01" step="0.01" required></label>
+          <label>Categoria
+            <select id="produtoCategoria" required>
+              <option value="Produtos para venda">Produtos para venda</option>
+              <option value="Matéria prima">Matéria prima</option>
+            </select>
+          </label>
+          <div class="management-actions">
+            <button type="submit" id="salvarProdutoBtn">Adicionar produto</button>
+            <button type="button" id="cancelarProdutoBtn" class="secondary-btn" hidden>Cancelar edição</button>
+          </div>
+        </form>
+        <div class="management-table-wrap">
+          <table>
+            <thead><tr><th>Produto</th><th>Categoria</th><th>Produção</th><th>Venda</th><th>Ações</th></tr></thead>
+            <tbody id="produtosTable"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="catalogoProdutos">
+        <section class="catalogo-grupo">
+          <h3>Produtos para venda</h3>
+          <div id="catalogoProdutosVenda" class="produtos-grid"></div>
+        </section>
+        <section class="catalogo-grupo">
+          <h3>Matéria prima</h3>
+          <div id="catalogoMateriaPrima" class="produtos-grid"></div>
+        </section>
+      </div>
 
       <div class="estoque-card">
         <h2>📦 Estoque e valores</h2>
-        <p>Os itens de mão de obra e os produtos do catálogo são atualizados automaticamente no fechamento diário.</p>
+        <p>Produtos para venda aparecem no fechamento; matérias-primas ficam disponíveis apenas para controle.</p>
+      </div>
+    </section>
+
+    <section class="table-section page" id="vendedores">
+      <h2>👥 Gerenciar vendedores</h2>
+      <form id="vendedorForm" class="management-form">
+        <input type="hidden" id="vendedorId">
+        <label>Nome<input type="text" id="vendedorNome" required></label>
+        <div class="management-actions">
+          <button type="submit" id="salvarVendedorBtn">Adicionar vendedor</button>
+          <button type="button" id="cancelarVendedorBtn" class="secondary-btn" hidden>Cancelar edição</button>
+        </div>
+      </form>
+      <div class="management-table-wrap">
+        <table>
+          <thead><tr><th>Nome</th><th>Ações</th></tr></thead>
+          <tbody id="vendedoresTable"></tbody>
+        </table>
       </div>
     </section>
 
@@ -62,8 +115,10 @@
 
       <form id="closureForm">
         <div class="full-width">
-          <label for="nomeVendedor">Nome do vendedor do dia</label>
-          <input type="text" id="nomeVendedor" placeholder="Ex.: Ana" required>
+          <label for="nomeVendedor">Vendedor do dia</label>
+          <select id="nomeVendedor" required>
+            <option value="">Selecione um vendedor</option>
+          </select>
         </div>
 
         <div class="full-width">

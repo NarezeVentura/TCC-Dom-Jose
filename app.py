@@ -8,19 +8,32 @@ from flask import Flask, jsonify, request
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 frontend_dir = os.path.join(BASE_DIR, "front end")
 db_path = os.environ.get("DB_PATH", os.path.join(BASE_DIR, "sistema_vendas.db"))
+CATEGORIA_VENDA = "Produtos para venda"
+CATEGORIA_MATERIA_PRIMA = "Matéria prima"
+CATEGORIAS_PRODUTO = (CATEGORIA_VENDA, CATEGORIA_MATERIA_PRIMA)
 
 CATALOGO_PRODUTOS = [
-    ("Trufas", 2.20, 6.00, "Trufas"),
-    ("Cones", 3.50, 12.00, "Cones"),
+    ("Trufas", 2.20, 6.00, CATEGORIA_VENDA),
+    ("Cones", 3.50, 12.00, CATEGORIA_VENDA),
     
-    ("Cone + Trufa", 5.70, 17.00, "Combo"),
-    ("Combo 2 Cones", 7.00, 22.00, "Combo"),
-    ("Combo 3 Trufas", 6.60, 16.00, "Combo"),
-    ("2 Cones + Trufa", 8.70, 27.00, "Combo"),
-    ("Cone + 2 Trufas", 7.90, 24.00, "Combo"),
-    ("2 Cones + 2 Trufas", 11.40, 32.00, "Combo"),
+    ("Cone + Trufa", 5.70, 17.00, CATEGORIA_VENDA),
+    ("Combo 2 Cones", 7.00, 22.00, CATEGORIA_VENDA),
+    ("Combo 3 Trufas", 6.60, 16.00, CATEGORIA_VENDA),
+    ("2 Cones + Trufa", 8.70, 27.00, CATEGORIA_VENDA),
+    ("Cone + 2 Trufas", 7.90, 24.00, CATEGORIA_VENDA),
+    ("2 Cones + 2 Trufas", 11.40, 32.00, CATEGORIA_VENDA),
 ]
 NOMES_CATALOGO = tuple(produto[0] for produto in CATALOGO_PRODUTOS)
+NOMES_LEGADOS_OCULTOS = (
+    "cone tradicional",
+    "cone de nutella",
+    "trufa",
+    "trufa de nutella",
+    "combo cone + trufa",
+    "combo cone + trufa (bueno, bueno)",
+    "combo cone + trufa (nutella, bueno)",
+    "combo 2 cones + 2 trufas",
+)
 
 app = Flask(__name__, static_folder=frontend_dir, static_url_path="/")
 
@@ -120,19 +133,35 @@ def init_db():
                 produto,
             )
 
-    for tipo, preco_producao, preco_venda, categoria in CATALOGO_PRODUTOS:
+    for tipo, _, _, _ in CATALOGO_PRODUTOS:
         cursor.execute(
             """
             UPDATE produtos
-            SET tipo = ?, preco_producao = ?, preco_venda = ?, categoria = ?
-            WHERE lower(tipo) = lower(?)
+            SET tipo = ?
+            WHERE lower(tipo) = lower(?) AND tipo != ?
             """,
-            (tipo, preco_producao, preco_venda, categoria, tipo),
+            (tipo, tipo, tipo),
         )
 
     cursor.execute(
         "DELETE FROM produtos WHERE categoria = ? OR lower(tipo) LIKE ? OR lower(tipo) LIKE ?",
         ("Mão de obra", "mão de obra%", "mao de obra%"),
+    )
+    cursor.execute(
+        """
+        UPDATE produtos
+        SET categoria = ?
+        WHERE lower(categoria) IN (?, ?)
+        """,
+        (CATEGORIA_MATERIA_PRIMA, "produtos de materia prima", "materia prima"),
+    )
+    cursor.execute(
+        """
+        UPDATE produtos
+        SET categoria = ?
+        WHERE categoria IS NULL OR lower(categoria) NOT IN (?, ?)
+        """,
+        (CATEGORIA_VENDA, CATEGORIA_VENDA.lower(), CATEGORIA_MATERIA_PRIMA.lower()),
     )
 
     conn.commit()
@@ -198,17 +227,76 @@ def listar_vendedores():
     return jsonify([{"id": row["id_vendedor"], "nome": row["nome"]} for row in vendedores])
 
 
+@app.route("/api/vendedores", methods=["POST"])
+def criar_vendedor():
+    dados = request.get_json(silent=True) or {}
+    nome = (dados.get("nome") or "").strip()
+    if not nome:
+        return jsonify({"error": "Informe o nome do vendedor"}), 400
+
+    conn = get_connection()
+    try:
+        if conn.execute("SELECT 1 FROM vendedores WHERE lower(nome) = lower(?)", (nome,)).fetchone():
+            return jsonify({"error": "Já existe um vendedor com esse nome"}), 409
+        cursor = conn.execute("INSERT INTO vendedores (nome) VALUES (?)", (nome,))
+        conn.commit()
+        return jsonify({"id": cursor.lastrowid, "nome": nome}), 201
+    finally:
+        conn.close()
+
+
+@app.route("/api/vendedores/<int:vendedor_id>", methods=["PUT"])
+def editar_vendedor(vendedor_id):
+    dados = request.get_json(silent=True) or {}
+    nome = (dados.get("nome") or "").strip()
+    if not nome:
+        return jsonify({"error": "Informe o nome do vendedor"}), 400
+
+    conn = get_connection()
+    try:
+        if not conn.execute("SELECT 1 FROM vendedores WHERE id_vendedor = ?", (vendedor_id,)).fetchone():
+            return jsonify({"error": "Vendedor não encontrado"}), 404
+        if conn.execute(
+            "SELECT 1 FROM vendedores WHERE lower(nome) = lower(?) AND id_vendedor != ?",
+            (nome, vendedor_id),
+        ).fetchone():
+            return jsonify({"error": "Já existe um vendedor com esse nome"}), 409
+        conn.execute("UPDATE vendedores SET nome = ? WHERE id_vendedor = ?", (nome, vendedor_id))
+        conn.commit()
+        return jsonify({"id": vendedor_id, "nome": nome})
+    finally:
+        conn.close()
+
+
+@app.route("/api/vendedores/<int:vendedor_id>", methods=["DELETE"])
+def excluir_vendedor(vendedor_id):
+    conn = get_connection()
+    try:
+        if not conn.execute("SELECT 1 FROM vendedores WHERE id_vendedor = ?", (vendedor_id,)).fetchone():
+            return jsonify({"error": "Vendedor não encontrado"}), 404
+        if conn.execute("SELECT 1 FROM vendas WHERE id_vendedor = ?", (vendedor_id,)).fetchone():
+            return jsonify({"error": "Não é possível excluir um vendedor com vendas registradas"}), 409
+        conn.execute("DELETE FROM vendedores WHERE id_vendedor = ?", (vendedor_id,))
+        conn.commit()
+        return jsonify({"message": "Vendedor excluído com sucesso"})
+    finally:
+        conn.close()
+
+
 @app.route("/api/produtos", methods=["GET"])
 def listar_produtos():
     conn = get_connection()
-    placeholders = ", ".join("?" for _ in NOMES_CATALOGO)
-    nomes_catalogo_normalizados = tuple(nome.lower() for nome in NOMES_CATALOGO)
     produtos = conn.execute(
-        f"SELECT id_produto, tipo, preco_producao, preco_venda, categoria FROM produtos "
-        f"WHERE lower(tipo) IN ({placeholders}) ORDER BY CASE lower(tipo) "
-        + " ".join(f"WHEN ? THEN {indice}" for indice, _ in enumerate(NOMES_CATALOGO))
-        + " END",
-        (*nomes_catalogo_normalizados, *nomes_catalogo_normalizados),
+                """
+                SELECT id_produto, tipo, preco_producao, preco_venda, categoria
+                FROM produtos
+                WHERE categoria != ?
+                    AND lower(tipo) NOT LIKE ?
+                    AND lower(tipo) NOT LIKE ?
+                    AND lower(tipo) NOT IN (?, ?, ?, ?, ?, ?, ?, ?)
+                ORDER BY id_produto
+                """,
+                ("Mão de obra", "mão de obra%", "mao de obra%", *NOMES_LEGADOS_OCULTOS),
     ).fetchall()
     conn.close()
     return jsonify(
@@ -223,6 +311,88 @@ def listar_produtos():
             for row in produtos
         ]
     )
+
+
+def _dados_produto(dados, produto_atual=None):
+    tipo = (dados.get("tipo") or dados.get("nome") or (produto_atual["tipo"] if produto_atual else "")).strip()
+    categoria = (dados.get("categoria") or (produto_atual["categoria"] if produto_atual else CATEGORIA_VENDA)).strip()
+    try:
+        preco_producao = float(dados.get("preco_producao", produto_atual["preco_producao"] if produto_atual else 0))
+        preco_venda = float(dados.get("preco_venda", produto_atual["preco_venda"] if produto_atual else 0))
+    except (TypeError, ValueError):
+        return None, "Os preços devem ser numéricos"
+    if not tipo:
+        return None, "Informe o nome do produto"
+    if categoria not in CATEGORIAS_PRODUTO:
+        return None, "Selecione uma categoria válida"
+    if preco_producao < 0 or preco_venda <= 0:
+        return None, "Informe preços válidos"
+    return (tipo, preco_producao, preco_venda, categoria or "geral"), None
+
+
+@app.route("/api/produtos", methods=["POST"])
+def criar_produto():
+    dados = request.get_json(silent=True) or {}
+    produto, erro = _dados_produto(dados)
+    if erro:
+        return jsonify({"error": erro}), 400
+
+    conn = get_connection()
+    try:
+        if conn.execute("SELECT 1 FROM produtos WHERE lower(tipo) = lower(?)", (produto[0],)).fetchone():
+            return jsonify({"error": "Já existe um produto com esse nome"}), 409
+        cursor = conn.execute(
+            "INSERT INTO produtos (tipo, preco_producao, preco_venda, categoria) VALUES (?, ?, ?, ?)",
+            produto,
+        )
+        conn.commit()
+        return jsonify({"id": cursor.lastrowid, "tipo": produto[0], "preco_producao": produto[1], "preco_venda": produto[2], "categoria": produto[3]}), 201
+    finally:
+        conn.close()
+
+
+@app.route("/api/produtos/<int:produto_id>", methods=["PUT"])
+def editar_produto(produto_id):
+    conn = get_connection()
+    try:
+        produto_atual = conn.execute(
+            "SELECT id_produto, tipo, preco_producao, preco_venda, categoria FROM produtos WHERE id_produto = ?",
+            (produto_id,),
+        ).fetchone()
+        if not produto_atual:
+            return jsonify({"error": "Produto não encontrado"}), 404
+        dados = request.get_json(silent=True) or {}
+        produto, erro = _dados_produto(dados, produto_atual)
+        if erro:
+            return jsonify({"error": erro}), 400
+        if conn.execute(
+            "SELECT 1 FROM produtos WHERE lower(tipo) = lower(?) AND id_produto != ?",
+            (produto[0], produto_id),
+        ).fetchone():
+            return jsonify({"error": "Já existe um produto com esse nome"}), 409
+        conn.execute(
+            "UPDATE produtos SET tipo = ?, preco_producao = ?, preco_venda = ?, categoria = ? WHERE id_produto = ?",
+            (*produto, produto_id),
+        )
+        conn.commit()
+        return jsonify({"id": produto_id, "tipo": produto[0], "preco_producao": produto[1], "preco_venda": produto[2], "categoria": produto[3]})
+    finally:
+        conn.close()
+
+
+@app.route("/api/produtos/<int:produto_id>", methods=["DELETE"])
+def excluir_produto(produto_id):
+    conn = get_connection()
+    try:
+        if not conn.execute("SELECT 1 FROM produtos WHERE id_produto = ?", (produto_id,)).fetchone():
+            return jsonify({"error": "Produto não encontrado"}), 404
+        if conn.execute("SELECT 1 FROM vendas WHERE id_produto = ?", (produto_id,)).fetchone():
+            return jsonify({"error": "Não é possível excluir um produto com vendas registradas"}), 409
+        conn.execute("DELETE FROM produtos WHERE id_produto = ?", (produto_id,))
+        conn.commit()
+        return jsonify({"message": "Produto excluído com sucesso"})
+    finally:
+        conn.close()
 
 
 @app.route("/api/vendas", methods=["POST"])
@@ -252,11 +422,10 @@ def registrar_fechamento_diario():
     try:
         cursor.execute("SELECT id_vendedor FROM vendedores WHERE lower(nome) = lower(?)", (nome_vendedor,))
         vendedor_row = cursor.fetchone()
-        if vendedor_row:
-            vendedor_id = vendedor_row["id_vendedor"]
-        else:
-            cursor.execute("INSERT INTO vendedores (nome) VALUES (?)", (nome_vendedor,))
-            vendedor_id = cursor.lastrowid
+        if not vendedor_row:
+            conn.close()
+            return jsonify({"error": "Selecione um vendedor cadastrado"}), 400
+        vendedor_id = vendedor_row["id_vendedor"]
 
         data_emissao = dados.get("data_emissao") or dados.get("data") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if not data_emissao:

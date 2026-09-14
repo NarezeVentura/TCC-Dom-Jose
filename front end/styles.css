@@ -86,6 +86,55 @@ body {
   margin-bottom: 30px;
 }
 
+.management-panel {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 30px;
+}
+
+.management-panel h3 {
+  margin-bottom: 16px;
+  color: #0f172a;
+}
+
+.management-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 20px;
+}
+
+.management-form label {
+  display: grid;
+  gap: 6px;
+  color: #475569;
+  font-size: 14px;
+}
+
+.management-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.secondary-btn {
+  background: #64748b;
+}
+
+.management-table-wrap {
+  overflow-x: auto;
+}
+
+.row-actions {
+  white-space: nowrap;
+}
+
+.row-actions button {
+  margin-right: 6px;
+}
+
 .form-section h2, .table-section h2, .estoque-card h2 {
   margin-bottom: 12px;
 }
@@ -182,6 +231,27 @@ td {
   grid-template-columns: repeat(3, 1fr);
   gap: 20px;
   margin-bottom: 30px;
+}
+
+.catalogo-grupo {
+  margin-bottom: 30px;
+}
+
+.catalogo-grupo h3 {
+  color: #0f172a;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 800px) {
+  .management-form {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .management-form {
+    grid-template-columns: 1fr;
+  }
 }
 
 .produto-card {
