@@ -51,3 +51,12 @@ Observações
 - O backend já serve a interface frontend automaticamente.
 - O sistema utiliza SQLite para armazenar vendedores, produtos, fechamentos diários e relatórios.
 - Em Windows, pode ser necessário executar o comando no terminal como `python app.py`.
+
+Inicialização sem o VS Code
+
+Também existem lançadores na pasta `iniciar`:
+
+- No Windows, clique duas vezes em `iniciar_windows.bat`.
+- No Linux, dê permissão de execução uma vez com `chmod +x iniciar/iniciar_linux.sh` e depois execute `iniciar/iniciar_linux.sh`.
+
+Na primeira execução, o lançador cria o ambiente virtual, instala as dependências, inicia o servidor e abre o sistema no navegador. Nas execuções seguintes, ele reutiliza o ambiente virtual existente.
