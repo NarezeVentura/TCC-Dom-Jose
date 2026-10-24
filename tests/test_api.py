@@ -37,6 +37,90 @@ class TestFluxoFechamentoDiario(unittest.TestCase):
         self.assertGreater(data["relatorio"]["faturamento"], 0)
         self.assertGreater(data["relatorio"]["lucro"], 0)
 
+    def test_crud_de_fechamento_diario(self):
+        criado = self.client.post(
+            "/api/fechamentos-diarios",
+            json={
+                "nome_vendedor": "Pedro",
+                "itens": [{"produto": "Cones", "quantidade": 2, "valor_unitario": 12}],
+            },
+        )
+        self.assertEqual(criado.status_code, 200)
+        fechamento_id = criado.get_json()["fechamento"]["id"]
+
+        detalhe = self.client.get(f"/api/fechamentos-diarios/{fechamento_id}")
+        self.assertEqual(detalhe.status_code, 200)
+        self.assertEqual(detalhe.get_json()["itens"][0]["produto"], "Cones")
+        self.assertEqual(detalhe.get_json()["itens"][0]["quantidade"], 2)
+        self.assertEqual(detalhe.get_json()["itens"][0]["valor_unitario"], 12)
+
+        conn = self.app_module.get_connection()
+        conn.execute("UPDATE produtos SET preco_venda = 20, preco_producao = 4 WHERE tipo = 'Cones'")
+        conn.commit()
+        conn.close()
+
+        editado = self.client.put(
+            f"/api/fechamentos-diarios/{fechamento_id}",
+            json={
+                "nome_vendedor": "Nicole",
+                "data_emissao": "2026-10-23",
+                "itens": [{"produto": "Cones", "quantidade": 2}],
+            },
+        )
+        self.assertEqual(editado.status_code, 200)
+        self.assertEqual(editado.get_json()["total_faturamento"], 24)
+        self.assertEqual(editado.get_json()["total_lucro"], 17)
+
+        editado = self.client.put(
+            f"/api/fechamentos-diarios/{fechamento_id}",
+            json={
+                "nome_vendedor": "Nicole",
+                "data_emissao": "2026-10-23",
+                "itens": [{"produto": "Trufas", "quantidade": 3}],
+            },
+        )
+        self.assertEqual(editado.status_code, 200)
+        self.assertEqual(editado.get_json()["total_faturamento"], 18)
+        detalhe_editado = self.client.get(f"/api/fechamentos-diarios/{fechamento_id}").get_json()
+        self.assertEqual(detalhe_editado["nome_vendedor"], "Nicole")
+        self.assertEqual(detalhe_editado["itens"][0]["produto"], "Trufas")
+
+        excluido = self.client.delete(f"/api/fechamentos-diarios/{fechamento_id}")
+        self.assertEqual(excluido.status_code, 200)
+        self.assertEqual(self.client.get(f"/api/fechamentos-diarios/{fechamento_id}").status_code, 404)
+        conn = self.app_module.get_connection()
+        vendas_restantes = conn.execute(
+            "SELECT COUNT(*) FROM vendas WHERE id_fechamento = ?",
+            (fechamento_id,),
+        ).fetchone()[0]
+        conn.close()
+        self.assertEqual(vendas_restantes, 0)
+
+    def test_edicao_de_fechamento_invalida_preserva_dados(self):
+        criado = self.client.post(
+            "/api/fechamentos-diarios",
+            json={
+                "nome_vendedor": "Pedro",
+                "itens": [{"produto": "Cones", "quantidade": 2, "valor_unitario": 12}],
+            },
+        )
+        fechamento_id = criado.get_json()["fechamento"]["id"]
+
+        resposta = self.client.put(
+            f"/api/fechamentos-diarios/{fechamento_id}",
+            json={
+                "nome_vendedor": "Nicole",
+                "data_emissao": "2026-10-23",
+                "itens": [{"produto": "Produto inexistente", "quantidade": 1}],
+            },
+        )
+
+        self.assertEqual(resposta.status_code, 400)
+        detalhe = self.client.get(f"/api/fechamentos-diarios/{fechamento_id}").get_json()
+        self.assertEqual(detalhe["nome_vendedor"], "Pedro")
+        self.assertEqual(detalhe["total_faturamento"], 24)
+        self.assertEqual(detalhe["itens"][0]["produto"], "Cones")
+
     def test_catalogo_contem_apenas_opcoes_padronizadas(self):
         response = self.client.get("/api/produtos")
 

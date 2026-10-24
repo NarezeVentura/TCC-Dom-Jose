@@ -4,10 +4,10 @@ Este projeto é uma aplicação web local para controlar vendas, organizar o fec
 
 Funcionalidades
 
-- Registro de fechamento diário com vendedor e itens
+- Registro, consulta, edição e exclusão de fechamentos diários com vendedor e itens
 - Catálogo de produtos e combos (cones, trufas, combinações e pacotes)
 - Cálculo de faturamento, lucro e comissão
-- Relatórios diários, semanais e mensais
+- Relatórios diários, semanais, mensais e de todos os períodos
 - Histórico de fechamentos armazenado em banco SQLite
 - Interface web simples em HTML, CSS e JavaScript
 
@@ -61,4 +61,3 @@ Observações
 - O backend já serve a interface frontend automaticamente.
 - O sistema utiliza SQLite para armazenar vendedores, produtos, fechamentos diários e relatórios.
 - Em Windows, pode ser necessário executar o comando no terminal como `python app.py`.
-

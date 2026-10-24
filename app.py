@@ -117,6 +117,10 @@ def init_db():
         cursor.execute("ALTER TABLE vendas ADD COLUMN id_fechamento INTEGER")
     if not _has_column(conn, "vendas", "observacao"):
         cursor.execute("ALTER TABLE vendas ADD COLUMN observacao TEXT")
+    if not _has_column(conn, "vendas", "preco_venda"):
+        cursor.execute("ALTER TABLE vendas ADD COLUMN preco_venda REAL")
+    if not _has_column(conn, "vendas", "preco_producao"):
+        cursor.execute("ALTER TABLE vendas ADD COLUMN preco_producao REAL")
     if not _has_column(conn, "produtos", "categoria"):
         cursor.execute("ALTER TABLE produtos ADD COLUMN categoria TEXT DEFAULT 'geral'")
 
@@ -467,8 +471,23 @@ def registrar_fechamento_diario():
                 produto_id = cursor.lastrowid
 
             cursor.execute(
-                "INSERT INTO vendas (id_vendedor, id_produto, quantidade, id_fechamento, observacao, data) VALUES (?, ?, ?, ?, ?, ?)",
-                (vendedor_id, produto_id, quantidade, fechamento_id, produto_nome, data_emissao),
+                """
+                INSERT INTO vendas (
+                    id_vendedor, id_produto, quantidade, id_fechamento, observacao,
+                    data, preco_venda, preco_producao
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    vendedor_id,
+                    produto_id,
+                    quantidade,
+                    fechamento_id,
+                    produto_nome,
+                    data_emissao,
+                    valor_unitario,
+                    custo_unitario,
+                ),
             )
 
             total_faturamento += quantidade * valor_unitario
@@ -529,13 +548,258 @@ def listar_fechamentos_diarios():
     )
 
 
+def _preparar_itens_fechamento(cursor, itens):
+    if not isinstance(itens, list) or not itens:
+        return None, "Informe pelo menos um item para o fechamento diário"
+
+    itens_preparados = []
+    for item in itens:
+        if not isinstance(item, dict):
+            return None, "Informe itens válidos para o fechamento"
+        produto_nome = item.get("produto") or item.get("nome_produto") or ""
+        if not isinstance(produto_nome, str):
+            return None, "Informe um nome de produto válido"
+        produto_nome = produto_nome.strip()
+        try:
+            quantidade_original = item.get("quantidade", 0)
+            quantidade = int(quantidade_original)
+        except (TypeError, ValueError):
+            return None, "A quantidade dos itens deve ser um número inteiro positivo"
+        if (
+            isinstance(quantidade_original, bool)
+            or quantidade <= 0
+            or str(quantidade_original).strip() != str(quantidade)
+            or not produto_nome
+        ):
+            return None, "Informe produto e quantidade válida em todos os itens"
+
+        produto = cursor.execute(
+            """
+            SELECT id_produto, preco_producao, preco_venda
+            FROM produtos
+            WHERE lower(tipo) = lower(?)
+            """,
+            (produto_nome,),
+        ).fetchone()
+        if not produto:
+            return None, f"Produto não encontrado: {produto_nome}"
+
+        itens_preparados.append(
+            {
+                "produto_id": produto["id_produto"],
+                "produto": produto_nome,
+                "quantidade": quantidade,
+                "preco_venda": float(produto["preco_venda"]),
+                "preco_producao": float(produto["preco_producao"]),
+            }
+        )
+    return itens_preparados, None
+
+
+@app.route("/api/fechamentos-diarios/<int:fechamento_id>", methods=["GET"])
+def obter_fechamento_diario(fechamento_id):
+    conn = get_connection()
+    fechamento = conn.execute(
+        """
+        SELECT id_fechamento, nome_vendedor, total_faturamento, total_lucro,
+               total_comissao, data_emissao, observacoes
+        FROM fechamentos_diarios
+        WHERE id_fechamento = ?
+        """,
+        (fechamento_id,),
+    ).fetchone()
+    if not fechamento:
+        conn.close()
+        return jsonify({"error": "Fechamento não encontrado"}), 404
+
+    itens = conn.execute(
+        """
+        SELECT v.id_venda, p.tipo AS produto, v.quantidade,
+               COALESCE(v.preco_venda, p.preco_venda) AS valor_unitario
+        FROM vendas v
+        LEFT JOIN produtos p ON p.id_produto = v.id_produto
+        WHERE v.id_fechamento = ?
+        ORDER BY v.id_venda
+        """,
+        (fechamento_id,),
+    ).fetchall()
+    conn.close()
+    return jsonify(
+        {
+            "id": fechamento["id_fechamento"],
+            "nome_vendedor": fechamento["nome_vendedor"],
+            "total_faturamento": fechamento["total_faturamento"],
+            "total_lucro": fechamento["total_lucro"],
+            "total_comissao": fechamento["total_comissao"],
+            "data_emissao": fechamento["data_emissao"],
+            "observacoes": fechamento["observacoes"],
+            "itens": [
+                {
+                    "id": item["id_venda"],
+                    "produto": item["produto"],
+                    "quantidade": item["quantidade"],
+                    "valor_unitario": item["valor_unitario"],
+                }
+                for item in itens
+            ],
+        }
+    )
+
+
+@app.route("/api/fechamentos-diarios/<int:fechamento_id>", methods=["PUT"])
+def editar_fechamento_diario(fechamento_id):
+    dados = request.get_json(silent=True) or {}
+    if not isinstance(dados, dict):
+        return jsonify({"error": "Informe os dados do fechamento"}), 400
+    nome_vendedor = dados.get("nome_vendedor") or dados.get("vendedor") or ""
+    if not isinstance(nome_vendedor, str):
+        return jsonify({"error": "Informe o nome do vendedor do dia"}), 400
+    nome_vendedor = nome_vendedor.strip()
+    itens = dados.get("itens")
+    data_emissao = dados.get("data_emissao") or dados.get("data")
+
+    if not nome_vendedor:
+        return jsonify({"error": "Informe o nome do vendedor do dia"}), 400
+    if not data_emissao:
+        return jsonify({"error": "Informe a data do fechamento"}), 400
+    try:
+        datetime.fromisoformat(data_emissao)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Informe uma data válida para o fechamento"}), 400
+
+    conn = get_connection()
+    try:
+        fechamento = conn.execute(
+            "SELECT id_fechamento, observacoes FROM fechamentos_diarios WHERE id_fechamento = ?",
+            (fechamento_id,),
+        ).fetchone()
+        if not fechamento:
+            return jsonify({"error": "Fechamento não encontrado"}), 404
+
+        vendedor = conn.execute(
+            "SELECT id_vendedor FROM vendedores WHERE lower(nome) = lower(?)",
+            (nome_vendedor,),
+        ).fetchone()
+        if not vendedor:
+            return jsonify({"error": "Selecione um vendedor cadastrado"}), 400
+
+        itens_preparados, erro = _preparar_itens_fechamento(conn.cursor(), itens)
+        if erro:
+            return jsonify({"error": erro}), 400
+
+        vendas_anteriores = conn.execute(
+            """
+            SELECT id_produto, preco_venda, preco_producao
+            FROM vendas
+            WHERE id_fechamento = ?
+            ORDER BY id_venda
+            """,
+            (fechamento_id,),
+        ).fetchall()
+        precos_anteriores = {}
+        for venda in vendas_anteriores:
+            precos_anteriores.setdefault(venda["id_produto"], []).append(venda)
+        for item in itens_preparados:
+            anteriores = precos_anteriores.get(item["produto_id"], [])
+            if anteriores:
+                anterior = anteriores.pop(0)
+                if anterior["preco_venda"] is not None:
+                    item["preco_venda"] = float(anterior["preco_venda"])
+                if anterior["preco_producao"] is not None:
+                    item["preco_producao"] = float(anterior["preco_producao"])
+
+        total_faturamento = sum(item["quantidade"] * item["preco_venda"] for item in itens_preparados)
+        total_lucro = sum(
+            item["quantidade"] * (item["preco_venda"] - item["preco_producao"])
+            for item in itens_preparados
+        )
+        total_comissao = total_lucro * 0.12
+        observacoes = dados.get("observacoes", fechamento["observacoes"]) or ""
+
+        conn.execute("DELETE FROM vendas WHERE id_fechamento = ?", (fechamento_id,))
+        conn.execute(
+            """
+            UPDATE fechamentos_diarios
+            SET nome_vendedor = ?, total_faturamento = ?, total_lucro = ?,
+                total_comissao = ?, data_emissao = ?, observacoes = ?
+            WHERE id_fechamento = ?
+            """,
+            (
+                nome_vendedor,
+                round(total_faturamento, 2),
+                round(total_lucro, 2),
+                round(total_comissao, 2),
+                data_emissao,
+                observacoes,
+                fechamento_id,
+            ),
+        )
+        for item in itens_preparados:
+            conn.execute(
+                """
+                INSERT INTO vendas (
+                    id_vendedor, id_produto, quantidade, id_fechamento, observacao,
+                    data, preco_venda, preco_producao
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    vendedor["id_vendedor"],
+                    item["produto_id"],
+                    item["quantidade"],
+                    fechamento_id,
+                    item["produto"],
+                    data_emissao,
+                    item["preco_venda"],
+                    item["preco_producao"],
+                ),
+            )
+        conn.commit()
+        return jsonify(
+            {
+                "message": "Fechamento diário atualizado com sucesso",
+                "id": fechamento_id,
+                "total_faturamento": round(total_faturamento, 2),
+                "total_lucro": round(total_lucro, 2),
+                "total_comissao": round(total_comissao, 2),
+            }
+        )
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"error": f"Erro ao atualizar fechamento diário: {exc}"}), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/fechamentos-diarios/<int:fechamento_id>", methods=["DELETE"])
+def excluir_fechamento_diario(fechamento_id):
+    conn = get_connection()
+    try:
+        fechamento = conn.execute(
+            "SELECT id_fechamento FROM fechamentos_diarios WHERE id_fechamento = ?",
+            (fechamento_id,),
+        ).fetchone()
+        if not fechamento:
+            return jsonify({"error": "Fechamento não encontrado"}), 404
+        conn.execute("DELETE FROM vendas WHERE id_fechamento = ?", (fechamento_id,))
+        conn.execute("DELETE FROM fechamentos_diarios WHERE id_fechamento = ?", (fechamento_id,))
+        conn.commit()
+        return jsonify({"message": "Fechamento diário excluído com sucesso"})
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({"error": f"Erro ao excluir fechamento diário: {exc}"}), 500
+    finally:
+        conn.close()
+
+
 @app.route("/api/vendas", methods=["GET"])
 def listar_vendas_api():
     conn = get_connection()
     rows = conn.execute(
         """
         SELECT v.id_venda, v.id_vendedor, v.id_produto, v.quantidade, v.data, v.id_fechamento,
-               p.tipo AS produto, p.preco_venda, f.nome_vendedor
+               p.tipo AS produto, COALESCE(v.preco_venda, p.preco_venda) AS preco_venda,
+               f.nome_vendedor
         FROM vendas v
         LEFT JOIN produtos p ON p.id_produto = v.id_produto
         LEFT JOIN fechamentos_diarios f ON f.id_fechamento = v.id_fechamento

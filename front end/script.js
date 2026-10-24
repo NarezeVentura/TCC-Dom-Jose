@@ -6,6 +6,8 @@ const reportsTable = document.getElementById("reportsTable");
 const periodoRelatorioEl = document.getElementById("periodoRelatorio");
 const addItemBtn = document.getElementById("addItemBtn");
 const refreshReportsBtn = document.getElementById("refreshReportsBtn");
+const salvarFechamentoBtn = document.getElementById("salvarFechamentoBtn");
+const cancelarFechamentoBtn = document.getElementById("cancelarFechamentoBtn");
 const produtoForm = document.getElementById("produtoForm");
 const produtosTableEl = document.getElementById("produtosTable");
 const cancelarProdutoBtn = document.getElementById("cancelarProdutoBtn");
@@ -237,9 +239,19 @@ function criarLinhaItem(item = {}) {
   });
 
   if (item.produto) {
+    if (!Array.from(select.options).some((option) => option.value === item.produto)) {
+      const option = document.createElement("option");
+      option.value = item.produto;
+      option.textContent = item.produto;
+      option.setAttribute("data-valor", item.valor_unitario || 0);
+      select.appendChild(option);
+    }
     select.value = item.produto;
     const selected = Array.from(select.options).find((option) => option.value === item.produto);
     if (selected) {
+      if (item.valor_unitario != null) {
+        selected.setAttribute("data-valor", item.valor_unitario);
+      }
       atualizarTotal();
     }
   }
@@ -349,7 +361,7 @@ async function carregarRelatorios(periodo = "diario") {
     reportsTable.innerHTML = "";
 
     if (!relatorios.length) {
-      reportsTable.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum relatório encontrado.</td></tr>';
+      reportsTable.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhum relatório encontrado.</td></tr>';
       return;
     }
 
@@ -357,15 +369,88 @@ async function carregarRelatorios(periodo = "diario") {
       const row = document.createElement("tr");
       row.innerHTML = `
         <td>${item.data ? new Date(item.data).toLocaleDateString("pt-BR") : "-"}</td>
-        <td>${item.vendedor || "-"}</td>
+        <td>${escaparHtml(item.vendedor || "-")}</td>
         <td>${formatarMoeda(item.faturamento)}</td>
         <td>${formatarMoeda(item.lucro)}</td>
         <td>${formatarMoeda(item.comissao)}</td>
+        <td class="row-actions">
+          <button type="button" class="view-closure-btn" data-id="${item.id}">Ver itens</button>
+          <button type="button" class="edit-closure-btn" data-id="${item.id}">Editar</button>
+          <button type="button" class="delete-closure-btn remove-item-btn" data-id="${item.id}">Excluir</button>
+        </td>
       `;
       reportsTable.appendChild(row);
     });
+
+    reportsTable.querySelectorAll(".view-closure-btn").forEach((button) => {
+      button.addEventListener("click", () => visualizarFechamento(Number(button.dataset.id), button));
+    });
+    reportsTable.querySelectorAll(".edit-closure-btn").forEach((button) => {
+      button.addEventListener("click", () => iniciarEdicaoFechamento(Number(button.dataset.id)));
+    });
+    reportsTable.querySelectorAll(".delete-closure-btn").forEach((button) => {
+      button.addEventListener("click", () => excluirFechamento(Number(button.dataset.id)));
+    });
   } catch (error) {
     console.error("Erro ao carregar relatórios:", error);
+  }
+}
+
+async function visualizarFechamento(id, button) {
+  const row = button.closest("tr");
+  const detalheExistente = row.nextElementSibling;
+  if (detalheExistente?.classList.contains("closure-details-row")) {
+    detalheExistente.remove();
+    button.textContent = "Ver itens";
+    return;
+  }
+
+  try {
+    const fechamento = await requisicaoJson(`/api/fechamentos-diarios/${id}`);
+    const detalhe = document.createElement("tr");
+    detalhe.className = "closure-details-row";
+    const itens = fechamento.itens.map((item) => `
+      <li>${escaparHtml(item.produto || "Produto removido")} — ${item.quantidade} un. × ${formatarMoeda(item.valor_unitario)}</li>
+    `).join("");
+    detalhe.innerHTML = `<td colspan="6"><strong>Itens:</strong><ul>${itens}</ul></td>`;
+    row.after(detalhe);
+    button.textContent = "Ocultar itens";
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function iniciarEdicaoFechamento(id) {
+  try {
+    const fechamento = await requisicaoJson(`/api/fechamentos-diarios/${id}`);
+    document.getElementById("nomeVendedor").value = fechamento.nome_vendedor;
+    document.getElementById("dataFechamento").value = String(fechamento.data_emissao || "").slice(0, 10);
+    document.getElementById("closureId").value = fechamento.id;
+    renderizarItens(fechamento.itens);
+    salvarFechamentoBtn.textContent = "Salvar alterações";
+    cancelarFechamentoBtn.hidden = false;
+    mostrarPagina("vendas");
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+function limparEdicaoFechamento() {
+  form.reset();
+  document.getElementById("closureId").value = "";
+  salvarFechamentoBtn.textContent = "Registrar fechamento diário";
+  cancelarFechamentoBtn.hidden = true;
+  renderizarItens();
+}
+
+async function excluirFechamento(id) {
+  if (!window.confirm("Deseja excluir este fechamento e todas as vendas associadas?")) return;
+  try {
+    await requisicaoJson(`/api/fechamentos-diarios/${id}`, { method: "DELETE" });
+    await carregarResumo();
+    await carregarRelatorios(periodoRelatorioEl.value);
+  } catch (error) {
+    alert(error.message);
   }
 }
 
@@ -376,6 +461,7 @@ addItemBtn.addEventListener("click", () => {
 refreshReportsBtn.addEventListener("click", () => {
   carregarRelatorios(periodoRelatorioEl.value);
 });
+cancelarFechamentoBtn.addEventListener("click", limparEdicaoFechamento);
 
 periodoRelatorioEl.addEventListener("change", () => {
   carregarRelatorios(periodoRelatorioEl.value);
@@ -427,6 +513,7 @@ cancelarVendedorBtn.addEventListener("click", limparFormularioVendedor);
 form.addEventListener("submit", async function (e) {
   e.preventDefault();
 
+  const fechamentoId = document.getElementById("closureId").value;
   const nomeVendedor = document.getElementById("nomeVendedor").value.trim();
   const dataFechamento = document.getElementById("dataFechamento").value;
   const linhas = Array.from(itensVendaListEl.querySelectorAll(".item-row"));
@@ -449,22 +536,24 @@ form.addEventListener("submit", async function (e) {
   }
 
   try {
-    const resposta = await fetch("/api/fechamentos-diarios", {
-      method: "POST",
+    const resposta = await fetch(
+      fechamentoId ? `/api/fechamentos-diarios/${fechamentoId}` : "/api/fechamentos-diarios",
+      {
+      method: fechamentoId ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         nome_vendedor: nomeVendedor,
         data_emissao: dataFechamento || null,
         itens,
       }),
-    });
+      },
+    );
 
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.error || "Erro ao registrar fechamento diário");
 
     alert(dados.message);
-    form.reset();
-    renderizarItens();
+    limparEdicaoFechamento();
     await carregarResumo();
     await carregarRelatorios(periodoRelatorioEl.value);
   } catch (error) {

@@ -114,6 +114,7 @@
       <p>Registre o vendedor do dia e todos os itens vendidos em um único lançamento.</p>
 
       <form id="closureForm">
+        <input type="hidden" id="closureId">
         <div class="full-width">
           <label for="nomeVendedor">Vendedor do dia</label>
           <select id="nomeVendedor" required>
@@ -130,7 +131,8 @@
 
         <div class="full-width actions">
           <button type="button" id="addItemBtn">+ Adicionar item</button>
-          <button type="submit">Registrar fechamento diário</button>
+          <button type="submit" id="salvarFechamentoBtn">Registrar fechamento diário</button>
+          <button type="button" id="cancelarFechamentoBtn" class="secondary-btn" hidden>Cancelar edição</button>
         </div>
       </form>
     </section>
@@ -142,6 +144,7 @@
           <option value="diario">Diário</option>
           <option value="semanal">Semanal</option>
           <option value="mensal">Mensal</option>
+          <option value="todos">Todos os períodos</option>
         </select>
         <button type="button" id="refreshReportsBtn">Atualizar</button>
       </div>
@@ -154,6 +157,7 @@
             <th>Faturamento</th>
             <th>Lucro</th>
             <th>Comissão</th>
+            <th>Ações</th>
           </tr>
         </thead>
         <tbody id="reportsTable"></tbody>
