@@ -2,6 +2,7 @@ import importlib
 import os
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 
 
 class TestFluxoFechamentoDiario(unittest.TestCase):
@@ -120,6 +121,41 @@ class TestFluxoFechamentoDiario(unittest.TestCase):
         self.assertEqual(detalhe["nome_vendedor"], "Pedro")
         self.assertEqual(detalhe["total_faturamento"], 24)
         self.assertEqual(detalhe["itens"][0]["produto"], "Cones")
+
+    def test_fechamentos_com_mais_de_35_dias_sao_excluidos_automaticamente(self):
+        data_antiga = (datetime.now() - timedelta(days=36)).strftime("%Y-%m-%d")
+        antigo = self.client.post(
+            "/api/fechamentos-diarios",
+            json={
+                "nome_vendedor": "Pedro",
+                "data_emissao": data_antiga,
+                "itens": [{"produto": "Cones", "quantidade": 2, "valor_unitario": 12}],
+            },
+        ).get_json()["fechamento"]
+        recente = self.client.post(
+            "/api/fechamentos-diarios",
+            json={
+                "nome_vendedor": "Nicole",
+                "itens": [{"produto": "Trufas", "quantidade": 1, "valor_unitario": 6}],
+            },
+        ).get_json()["fechamento"]
+
+        resposta = self.client.get("/api/fechamentos-diarios")
+        ids_restantes = [fechamento["id"] for fechamento in resposta.get_json()]
+        self.assertNotIn(antigo["id"], ids_restantes)
+        self.assertIn(recente["id"], ids_restantes)
+        self.assertEqual(
+            self.client.get(f"/api/fechamentos-diarios/{antigo['id']}").status_code,
+            404,
+        )
+
+        conn = self.app_module.get_connection()
+        vendas_antigas = conn.execute(
+            "SELECT COUNT(*) FROM vendas WHERE id_fechamento = ?",
+            (antigo["id"],),
+        ).fetchone()[0]
+        conn.close()
+        self.assertEqual(vendas_antigas, 0)
 
     def test_catalogo_contem_apenas_opcoes_padronizadas(self):
         response = self.client.get("/api/produtos")

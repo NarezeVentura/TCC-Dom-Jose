@@ -38,6 +38,39 @@ NOMES_LEGADOS_OCULTOS = (
 app = Flask(__name__, static_folder=frontend_dir, static_url_path="/")
 
 
+def remover_dados_expirados():
+    conn = get_connection()
+    try:
+        limite = (datetime.now() - timedelta(days=35)).strftime("%Y-%m-%d %H:%M:%S")
+        conn.execute(
+            """
+            DELETE FROM vendas
+            WHERE datetime(data) < datetime(?)
+               OR id_fechamento IN (
+                    SELECT id_fechamento
+                    FROM fechamentos_diarios
+                    WHERE datetime(data_emissao) < datetime(?)
+               )
+            """,
+            (limite, limite),
+        )
+        conn.execute(
+            "DELETE FROM fechamentos_diarios WHERE datetime(data_emissao) < datetime(?)",
+            (limite,),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@app.before_request
+def limpar_dados_expirados_antes_da_requisicao():
+    remover_dados_expirados()
+
+
 @app.after_request
 def adicionar_cors(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
@@ -173,6 +206,7 @@ def init_db():
 
 
 init_db()
+remover_dados_expirados()
 
 
 def calcular_relatorio(tipo_relatorio):
