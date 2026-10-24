@@ -326,12 +326,15 @@ async function carregarResumo() {
     clientesCadastradosEl.textContent = `${vendedores.length} vendedores`;
     atualizarMaisVendido();
 
-    if (fechamentos.length > 0) {
-      const ultimo = fechamentos[0];
-      totalVendasHoje = Number(ultimo.total_faturamento || 0);
-    } else {
-      totalVendasHoje = 0;
-    }
+    const agora = new Date();
+    const dataHoje = [
+      agora.getFullYear(),
+      String(agora.getMonth() + 1).padStart(2, "0"),
+      String(agora.getDate()).padStart(2, "0"),
+    ].join("-");
+    totalVendasHoje = fechamentos
+      .filter((fechamento) => String(fechamento.data_emissao).slice(0, 10) === dataHoje)
+      .reduce((total, fechamento) => total + Number(fechamento.total_faturamento || 0), 0);
 
     atualizarVendasHoje();
   } catch (error) {
